@@ -244,7 +244,7 @@ export default function LoginPage() {
           margin: 0,
           marginTop: '0.5rem' 
         }}>
-          Don't have an account?{' '}
+          Don t have an account?{' '}
           <Link 
             href="/register" 
             style={{

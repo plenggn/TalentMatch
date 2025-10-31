@@ -253,7 +253,7 @@ const EnhancedChatbotModalContent = ({ applicantId, onClose, candidateName, onOp
       
       const botMessage: ChatMessage = { 
           id: (Date.now() + 1).toString(), 
-          role: 'assistant', 
+          role: 'assistant',
           content: `**${title}**: \n\n${content}` 
       };
       setMessages(prev => [...prev, botMessage]);
