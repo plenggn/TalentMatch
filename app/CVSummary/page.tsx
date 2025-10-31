@@ -1,5 +1,6 @@
 "use client";
 
+// --- IMPORTS (เหมือนเดิม) ---
 import React, { useState, useEffect, useRef, useMemo, Suspense } from "react"; 
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '../../lib/supabaseClient'; 
@@ -7,12 +8,12 @@ import { FileText, Download, Printer, ChevronDown, X, BarChart2, Star, Zap, Aler
 import Link from "next/link"; 
 import Image from "next/image"; 
 
-// --- Color & Style Definitions (New Minimalist Palette) ---
+// --- Color & Style Definitions (เหมือนเดิม) ---
 const PRIMARY_COLOR_LIGHT = '#14ADD6'; // Cyan-Blue
 const PRIMARY_COLOR_DARK = '#384295'; // Deep Indigo
 const GRADIENT_CLASS = 'bg-gradient-to-r from-[#14ADD6] to-[#384295]';
 
-// --- Interfaces (ตรงกับ DB) ---
+// --- Interfaces (เหมือนเดิม) ---
 interface CandidateReport {
   id: string; 
   name: string;
@@ -37,7 +38,7 @@ const STATUS_OPTIONS = ["Applied", "Shortlisted", "Interviewed", "Offered", "Rej
 
 // --- Localization Content (เหมือนเดิม) ---
 const LOCALE = {
-// ... (Localization Content เหมือนเดิม)
+// ... (Localization Content ทั้งหมดของคุณ) ...
     EN: {
         TITLE: "AI HR Assistant Chat",
         GREETING: (name: string) => `Hello! I'm **TalentBot AI**, your HR assistant. I can analyze the CV of **${name}** based *only* on the provided document.`,
@@ -102,6 +103,7 @@ interface ChatMessage {
 }
 
 const AIHeadCharacter = ({ size = 'md', animated = false }) => {
+    // ... (โค้ด SVG ของคุณ) ...
     const sizes = { sm: 'w-8 h-8', md: 'w-12 h-12', lg: 'w-20 h-20' };
     const svgContent = (
       <svg viewBox="0 0 120 120" className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
@@ -130,7 +132,7 @@ const AIHeadCharacter = ({ size = 'md', animated = false }) => {
         {animated && ( <div className="absolute -top-1 -right-1"> <Sparkles className="h-4 w-4 text-cyan-400 animate-pulse" /> </div> )}
       </div>
     );
-  };
+};
 
 interface ChatbotProps {
     applicantId: string;
@@ -138,11 +140,11 @@ interface ChatbotProps {
     candidateName: string;
     onOpenCV: () => void;
     onOpenReport: () => void;
-    candidateData: CandidateReport | null; // ✅ Pass full candidate data for analysis tools
+    candidateData: CandidateReport | null;
 }
 
 const EnhancedChatbotModalContent = ({ applicantId, onClose, candidateName, onOpenCV, onOpenReport, candidateData }: ChatbotProps) => {
-// ... (EnhancedChatbotModalContent Component ใช้งานเหมือนเดิม)
+// ... (โค้ด EnhancedChatbotModalContent ทั้งหมดของคุณ) ...
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -179,7 +181,8 @@ const EnhancedChatbotModalContent = ({ applicantId, onClose, candidateName, onOp
             content: T.GREETING(candidateName) + `\n\n${T.PROMPT_HINT}`,
         }]);
     }
-  }, [applicantId, candidateName, language]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [applicantId, candidateName, language]); // คำเตือนจาก Log (line 182) อยู่ที่นี่ - แก้ไขโดยเพิ่ม T, messages
 
 
   const callAiApi = async (userQuery: string, messageId: string) => {
@@ -291,12 +294,14 @@ const EnhancedChatbotModalContent = ({ applicantId, onClose, candidateName, onOp
       { icon: FileText, label: T.TOOL_SHORTCUTS.REPORT, action: onOpenReport, color: `bg-[#14ADD6]/10 hover:bg-[#14ADD6]/20 text-[#14ADD6]` },
       { icon: Users, label: T.TOOL_SHORTCUTS.INFERENCE, action: () => handleAnalysisTool('inference'), color: `bg-[#384295]/10 hover:bg-[#384295]/20 text-[#384295]` },
       { icon: Cpu, label: T.TOOL_SHORTCUTS.PREDICTION, action: () => handleAnalysisTool('prediction'), color: "bg-gray-100 hover:bg-gray-200 text-gray-700" },
-  ], [T, candidateData]); // Re-run memo if candidateData changes for tools that rely on it
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  ], [T, candidateData]); // คำเตือนจาก Log (line 294) อยู่ที่นี่ - แก้ไขโดยเพิ่ม onOpenCV, onOpenReport, handleAnalysisTool
 
   return (
     <div className="flex flex-col h-full bg-white rounded-2xl shadow-2xl overflow-hidden">
         {/* Header (Minimalist Gradient) */}
         <div className={`relative p-4 border-b ${GRADIENT_CLASS} text-white rounded-t-2xl overflow-hidden flex-shrink-0`}>
+          {/* ... (JSX ภายใน Header) ... */}
           <div className="absolute inset-0 opacity-10">
              <div className="absolute top-0 left-0 w-32 h-32 bg-white rounded-full blur-3xl animate-pulse"></div>
              <div className="absolute bottom-0 right-0 w-32 h-32 bg-cyan-300 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }}></div>
@@ -336,6 +341,7 @@ const EnhancedChatbotModalContent = ({ applicantId, onClose, candidateName, onOp
         
         {/* Quick Actions (ปุ่มแนะนำคำถาม) + Tool Shortcuts (4x2 Grid) */}
         <div className="p-3 border-b bg-gray-50 flex-shrink-0">
+          {/* ... (JSX ภายใน Quick Actions) ... */}
           <h4 className="text-sm font-bold text-gray-800 mb-2">{T.HINT_HEADER}</h4>
           
           <div className="grid grid-cols-4 gap-2 mb-2">
@@ -378,7 +384,7 @@ const EnhancedChatbotModalContent = ({ applicantId, onClose, candidateName, onOp
 
         {/* Messages */}
         <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50/50">
-          
+          {/* ... (JSX ภายใน Messages) ... */}
            {messages.map((message) => (
                 <div
                   key={message.id}
@@ -425,6 +431,7 @@ const EnhancedChatbotModalContent = ({ applicantId, onClose, candidateName, onOp
 
         {/* Input */}
         <div className="p-4 border-t bg-white rounded-b-2xl flex-shrink-0">
+          {/* ... (JSX ภายใน Input) ... */}
           <form onSubmit={handleSubmit}>
             <div className="flex gap-2 items-center">
              <input
@@ -479,7 +486,7 @@ const EnhancedChatbotModalContent = ({ applicantId, onClose, candidateName, onOp
 };
 
 
-// --- NEW COMPONENT: Email Draft Modal (Minimalist Redesign) ---
+// --- NEW COMPONENT: Email Draft Modal (เหมือนเดิม) ---
 interface EmailDraftModalProps {
     draft: string;
     type: 'Offer' | 'Rejection';
@@ -489,6 +496,7 @@ interface EmailDraftModalProps {
 }
 
 const EmailDraftModal = ({ draft, type, onClose, candidateName, newStatus }: EmailDraftModalProps) => {
+    // ... (โค้ด EmailDraftModal ทั้งหมดของคุณ) ...
     const copyToClipboard = () => {
         navigator.clipboard.writeText(draft);
         alert('Email draft copied to clipboard!');
@@ -542,12 +550,17 @@ const EmailDraftModal = ({ draft, type, onClose, candidateName, newStatus }: Ema
     );
 };
 
-
-export default function CVSummaryApp() {
+// ===================================================================
+// ===== 1. COMPONENT ลูก (CVSummaryContent) =====
+// (ย้ายโค้ดทั้งหมดของ CVSummaryApp เดิมมาไว้ที่นี่)
+// ===================================================================
+const CVSummaryContent = () => {
+  // ✅ HOOKS (ย้ายมาที่นี่)
   const router = useRouter();
-  const searchParams = useSearchParams();
+  const searchParams = useSearchParams(); // ✅ เรียกใช้ที่นี่
   const applicantId = searchParams.get('applicantId');
 
+  // ✅ STATES (ย้ายมาที่นี่)
   const [candidateData, setCandidateData] = useState<CandidateReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -555,26 +568,20 @@ export default function CVSummaryApp() {
   const [showCVModal, setShowCVModal] = useState(false);
   const [showChatModal, setShowChatModal] = useState(false);
   const [showScheduleModal, setShowScheduleModal] = useState(false); 
-  // ✅ NEW STATES
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [emailDraftData, setEmailDraftData] = useState<{ draft: string, type: 'Offer' | 'Rejection', newStatus: string } | null>(null);
   const [isDrafting, setIsDrafting] = useState(false);
 
-  // --- PSS Calculation Logic ---
+  // ✅ LOGIC (USEMEMO, USEEFFECT) (ย้ายมาที่นี่)
   const calculatePSS = useMemo(() => {
     if (!candidateData) return 0;
 
     const matchingScore = candidateData.matching_score || 0;
-    
-    // --- 1. Map Potential Prediction (0-100) ---
     const predText = candidateData.potential_prediction?.toLowerCase() || '';
     let potentialScore = 0;
-    
     const defaultPrediction = "no prediction data available.";
-    
-    // ✅ FIX 1: PSS Score should be 0 if the profile is un-analyzed.
     if (matchingScore === 0 && predText.includes(defaultPrediction.toLowerCase())) {
-        return 0; // Return 0 if matching hasn't run.
+        return 0;
     }
 
     if (predText.includes('high potential') || predText.includes('senior ready') || predText.includes('excellent growth')) {
@@ -585,7 +592,6 @@ export default function CVSummaryApp() {
         potentialScore = 40;
     }
 
-    // --- 2. Map Personality Inference (0-100) ---
     const personalityText = candidateData.personality_inference?.toLowerCase() || '';
     let personalityScore = 0;
     if (personalityText.includes('result-oriented') || personalityText.includes('decisive') || personalityText.includes('leadership')) {
@@ -596,16 +602,13 @@ export default function CVSummaryApp() {
         personalityScore = 50;
     }
 
-    // --- 3. Weighted Average (Mock Formula) ---
-    // PSS = (50% Match) + (30% Potential) + (20% Personality)
     const pss = (0.5 * matchingScore) + (0.3 * potentialScore) + (0.2 * personalityScore);
-    
     return Math.round(pss);
 
   }, [candidateData]);
 
 
-  // --- Data Fetching (เหมือนเดิม) ---
+  // Data Fetching
   useEffect(() => {
     if (!applicantId) { setError("Error: Applicant ID is missing in the URL."); setLoading(false); return; }
     const fetchApplicantData = async () => {
@@ -624,10 +627,10 @@ export default function CVSummaryApp() {
       setLoading(false);
     };
     fetchApplicantData();
-  }, [applicantId]);
+  }, [applicantId]); // ✅ ทำงานถูกต้องเมื่อ applicantId พร้อมใช้งาน
 
 
-  // --- Status Update Logic (เหมือนเดิม) ---
+  // ✅ FUNCTIONS/HANDLERS (ย้ายมาที่นี่)
   const handleUpdateStatus = async (newStatus: string) => {
     if (!candidateData) return;
     const { error } = await supabase.from("applicants").update({ status: newStatus }).eq("id", candidateData.id);
@@ -640,7 +643,6 @@ export default function CVSummaryApp() {
     setShowStatusDropdown(false);
   };
   
-  // ✅ NEW FUNCTION: handleDraftEmail
   const handleDraftEmail = async (type: 'offer' | 'rejection') => {
     if (!applicantId || !candidateData) return;
     
@@ -661,10 +663,7 @@ export default function CVSummaryApp() {
             throw new Error(result.error || `Failed to draft ${type} email.`);
         }
 
-        // อัปเดต State หน้า CV Summary
         setCandidateData(prev => prev ? {...prev, status: result.statusUpdate} : null);
-        
-        // แสดง Modal
         setEmailDraftData({ 
             draft: result.draft, 
             type: type === 'offer' ? 'Offer' : 'Rejection', 
@@ -679,8 +678,6 @@ export default function CVSummaryApp() {
     }
   };
 
-
-  // --- Export and Print Functions (เหมือนเดิม) ---
   const exportToExcel = () => { 
       if (!candidateData) return;
       const csvContent = [
@@ -695,13 +692,10 @@ export default function CVSummaryApp() {
     window.print();
   };
   
-  // Handlers for Modal Interactivity
   const openCVModal = () => { setShowChatModal(false); setShowCVModal(true); };
   const closeCVModal = () => setShowCVModal(false);
   const openScheduleModal = () => { setShowChatModal(false); setShowScheduleModal(true); };
 
-
-  // --- Share to Email Function (เหมือนเดิม) ---
   const shareToEmail = () => {
       if (!candidateData) return;
       const subject = `HR Report: ${candidateData.name} (${candidateData.matching_score}%)`;
@@ -716,7 +710,7 @@ export default function CVSummaryApp() {
   };
 
 
-  // --- Render Helpers (มีการใช้ PSS) ---
+  // ✅ RENDER HELPERS (ย้ายมาที่นี่)
   const getStatusColor = (status: string) => {
     const colors: Record<string, {bg: string, text: string}> = {
       Applied: { bg: "bg-gray-100", text: "text-gray-600" }, 
@@ -729,7 +723,6 @@ export default function CVSummaryApp() {
   };
   const getMatchingColor = (score: number) => {
       if (score >= 90) return "bg-gradient-to-r from-green-500 to-emerald-600 shadow-emerald-400/50";
-      // Use the requested colors for high/mid scores
       if (score >= 75) return `bg-gradient-to-r from-[#14ADD6] to-[#384295] shadow-[#384295]/50`; 
       if (score >= 60) return "bg-gradient-to-r from-yellow-500 to-orange-500 shadow-orange-400/50";
       return "bg-gray-500 shadow-gray-400/50";
@@ -760,7 +753,7 @@ export default function CVSummaryApp() {
   };
 
 
-  // --- Loading / Error States (เหมือนเดิม) ---
+  // ✅ LOADING / ERROR STATES (ย้ายมาที่นี่)
   if (loading) { 
     return (
         <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -783,8 +776,7 @@ export default function CVSummaryApp() {
     );
   }
 
-  // --- Render Sections ---
-
+  // ✅ RENDER SECTIONS (ย้ายมาที่นี่)
   const RenderCandidateOverview = () => {
       const { bg: statusBg, text: statusText } = getStatusColor(candidateData.status);
       return (
@@ -792,6 +784,7 @@ export default function CVSummaryApp() {
               
             {/* Action Bar (Minimalist Redesign) */}
             <div className="flex justify-between items-start mb-6 print:hidden">
+                {/* ... (JSX Action Bar) ... */}
                 <h1 className={`text-3xl font-extrabold mb-1 ${GRADIENT_CLASS} inline-block bg-clip-text text-transparent`}>
                     AI HR MATCHING REPORT
                 </h1>
@@ -847,7 +840,8 @@ export default function CVSummaryApp() {
                   
                   {/* Col 1 & 2 & 4: Profile, Summary (80%) */}
                   <div className="col-span-4 space-y-3"> 
-                      <div className="flex items-center gap-4">
+                      {/* ... (JSX Profile Summary) ... */}
+                       <div className="flex items-center gap-4">
                            <div className={`w-16 h-16 rounded-full bg-white flex items-center justify-center text-[${PRIMARY_COLOR_DARK}] font-bold text-xl border-4 border-[#14ADD6]/50 shadow-lg`}>
                               {candidateData.firstName[0]}{candidateData.lastName[0]}
                           </div>
@@ -864,11 +858,11 @@ export default function CVSummaryApp() {
                               <span className="leading-relaxed">{candidateData.ai_summary}</span>
                           </p>
                       </div>
-                      
                   </div>
                   
                   {/* Col 3: Match Score (20%) - Shifting to be the last column */}
                   <div className="col-span-1 flex flex-col items-center justify-center pt-3">
+                      {/* ... (JSX Match Score) ... */}
                       <div className={`${getMatchingColor(candidateData.matching_score)} text-white rounded-2xl p-4 flex flex-col items-center justify-center shadow-2xl w-full text-center print:shadow-none print:bg-gray-100 print:text-black print:border print:border-gray-300 transform hover:scale-105 transition-all duration-300`}>
                           <div className="text-6xl font-extrabold">{candidateData.matching_score}%</div>
                           <div className="text-sm mt-1 uppercase tracking-wider font-semibold">Match Score</div>
@@ -886,9 +880,8 @@ export default function CVSummaryApp() {
     }
 
   const RenderDeepAnalysis = () => (
-      // RenderDeepAnalysis ถูกเรียกให้เป็น Full Width โดยตรง
       <div className="space-y-8">
-          
+          {/* ... (JSX RenderDeepAnalysis) ... */}
           {/* Section 1: Job Fit & Experience Summary */}
           <div className="bg-white rounded-2xl shadow-xl p-6 border border-gray-100 print:shadow-none print:border print:p-0 print:break-inside-avoid">
               <h3 className={`flex items-center gap-2 text-xl font-bold text-[${PRIMARY_COLOR_DARK}] mb-4 print:text-black`}>
@@ -918,6 +911,7 @@ export default function CVSummaryApp() {
           
           {/* Section 2: Skill Matrix & Gaps */}
           <div className="bg-white rounded-2xl shadow-xl p-6 border border-gray-100 print:shadow-none print:border print:p-0 print:break-inside-avoid">
+              {/* ... (JSX Skill Matrix) ... */}
               <h3 className={`flex items-center gap-2 text-xl font-bold text-[${PRIMARY_COLOR_DARK}] mb-4 print:text-black`}>
                   <BarChart2 size={20} className={`text-[#14ADD6]`} /> Skill Matrix & Proficiency
               </h3>
@@ -989,10 +983,9 @@ export default function CVSummaryApp() {
       </div>
   );
   
-  // ✅ NEW: HR Automation Section (Full Width)
   const RenderHRAutomationSection = () => (
       <div className="mt-8 mb-8 space-y-6 print:hidden">
-          
+          {/* ... (JSX RenderHRAutomationSection) ... */}
           <div className="bg-white rounded-3xl shadow-2xl p-8 border border-gray-100">
               <h3 className={`text-2xl font-bold text-[${PRIMARY_COLOR_DARK}] mb-6`}>HR Automation: Email Drafting & Actions</h3>
               
@@ -1032,10 +1025,9 @@ export default function CVSummaryApp() {
       </div>
   );
   
-  // ✅ NEW: CV Document Access Section (Full Width, อยู่ล่างสุด)
   const RenderCVDocumentSection = () => (
     <div className="mt-8 mb-8 space-y-6 print:hidden">
-        
+        {/* ... (JSX RenderCVDocumentSection) ... */}
         <div className="bg-white rounded-3xl shadow-2xl p-8 border border-gray-100">
             <h3 className={`text-2xl font-bold text-[${PRIMARY_COLOR_DARK}] mb-6`}>
                 <FileText size={24} className="inline-block mr-2 text-[#14ADD6]"/> CV Document Access (File Reference)
@@ -1057,7 +1049,7 @@ export default function CVSummaryApp() {
                 {/* 2. Download CV Button (Secondary Action) */}
                 <div className="col-span-1">
                     {candidateData?.cv_url ? (
-                        <button onClick={() => window.open(candidateData.cv_url)} className={`w-full px-4 py-3 bg-gray-100 border border-gray-300 text-gray-700 rounded-xl font-semibold hover:bg-gray-200 transition shadow-sm flex items-center justify-center gap-2`}>
+                        <button onClick={() => window.open(candidateData.cv_url!)} className={`w-full px-4 py-3 bg-gray-100 border border-gray-300 text-gray-700 rounded-xl font-semibold hover:bg-gray-200 transition shadow-sm flex items-center justify-center gap-2`}>
                             <Download size={20} /> Download Original File
                         </button>
                     ) : (
@@ -1073,11 +1065,9 @@ export default function CVSummaryApp() {
     </div>
   );
   
-  // ⛔️ RenderCVSection ถูกลบออกแล้ว
-
-
+  
+  // ✅ JSX RETURN (ย้ายมาที่นี่)
   return (
-    <Suspense fallback={<div>Loading...</div>}>
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-6 pt-12"> 
         {/* CSS สำหรับ Print Optimization (เหมือนเดิม) */}
         <style jsx global>{`
@@ -1182,6 +1172,27 @@ export default function CVSummaryApp() {
 
       </div>
     </div>
+  );
+}
+
+
+// ===================================================================
+// ===== 2. COMPONENT แม่ (PAGE หลักที่ EXPORT) =====
+// (นี่คือ 'CVSummaryApp' เดิมของคุณที่ถูกแก้ไข)
+// ===================================================================
+export default function CVSummaryPage() {
+  
+  // ❌ ห้ามมี Logic หรือ Hooks (useSearchParams) ที่นี่
+
+  return (
+    // ✅ ห่อ Component ลูกของคุณด้วย <Suspense>
+    <Suspense fallback={
+        <div className="min-h-screen flex items-center justify-center bg-gray-50">
+            <Loader2 className={`w-10 h-10 animate-spin text-[${PRIMARY_COLOR_DARK}]`} />
+            <p className="ml-3 text-gray-600">Loading Page...</p>
+        </div>
+    }>
+      <CVSummaryContent />
     </Suspense>
   );
 }
