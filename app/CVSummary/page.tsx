@@ -1078,7 +1078,6 @@ export default function CVSummaryApp() {
 
   return (
     <Suspense fallback={<div>Loading...</div>}>
-    // ✅ FIX 5: ปรับพื้นหลังตามสไตล์ JobDescriptionPage
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-6 pt-12"> 
         {/* CSS สำหรับ Print Optimization (เหมือนเดิม) */}
         <style jsx global>{`
