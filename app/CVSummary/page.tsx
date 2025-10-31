@@ -1,6 +1,6 @@
 // app/CVSummary/page.tsx (Minimalist AI Report Design - A4 Optimized Final)
 "use client";
-import React, { useState, useEffect, useRef, useMemo } from "react"; 
+import React, { useState, useEffect, useRef, useMemo, Suspense } from "react"; 
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '../../lib/supabaseClient'; 
 import { FileText, Download, Printer, ChevronDown, X, BarChart2, Star, Zap, AlertTriangle, Check, ArrowLeft, Loader2, Mail, Users, HardHat, GraduationCap, Clock, TrendingUp, Cpu, Heart, MessageSquare, Eye, Send, Sparkles, Brain, ClipboardCheck, ArrowUpRight } from "lucide-react"; 
@@ -1077,6 +1077,7 @@ export default function CVSummaryApp() {
 
 
   return (
+    <Suspense fallback={<div>Loading...</div>}>
     // ✅ FIX 5: ปรับพื้นหลังตามสไตล์ JobDescriptionPage
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-6 pt-12"> 
         {/* CSS สำหรับ Print Optimization (เหมือนเดิม) */}
@@ -1182,5 +1183,6 @@ export default function CVSummaryApp() {
 
       </div>
     </div>
+    </Suspense>
   );
 }
