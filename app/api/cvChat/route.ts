@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenerativeAI, SingleRequestOptions } from "@google/generative-ai";
 import { supabaseAdminClient } from "../../../lib/supabaseAdminClient";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -123,16 +123,22 @@ ${userQuery}
  const model = genAI.getGenerativeModel({ model: GEMINI_CHAT_MODEL });
     
     // Config สำหรับ generateContent
-    const config = {
+    const config  = {
         generationConfig: {
             maxOutputTokens: MAX_TOKENS,
         }
     };
 
- const result = await model.generateContent(
-        prompt, 
-        config  
-    );
+    // const result = await model.generateContent(
+    //         prompt, 
+    //         config  
+    //     );
+    const result = await model.generateContent({
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        generationConfig: {
+            maxOutputTokens: MAX_TOKENS,
+        }
+    });
 
  const responseText = result?.response?.text()?.trim() ?? "AI did not return any response.";
 
