@@ -1,6 +1,10 @@
+// app/layout.tsx
+"use client"; // เพิ่มบรรทัดนี้ด้านบนสุด
+
 import './globals.css'
 import { Nunito } from 'next/font/google';
 import Navbar from '@components/Navbar';
+import { SessionProvider } from "next-auth/react"; // ✅ import SessionProvider
 
 const nunito = Nunito({
   subsets: ['latin'],
@@ -16,8 +20,10 @@ export default function RootLayout({
   return (
     <html lang="en" className={nunito.variable}>
       <body style={{ fontFamily: 'var(--font-nunito), sans-serif' }}>
-        <Navbar />  {/* เพิ่มบรรทัดนี้ */}
-        {children}
+        <SessionProvider>
+          <Navbar />  {/* ครอบด้วย SessionProvider */}
+          {children}
+        </SessionProvider>
       </body>
     </html>
   );

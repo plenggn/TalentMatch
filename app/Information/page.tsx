@@ -1,40 +1,29 @@
 "use client";
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { supabase } from "../../lib/supabaseClient"; 
 import { Upload, Eye, Edit2, Trash2, X, Download, FileText, Plus, Search, ChevronLeft, ChevronRight, ArrowUpDown, Filter } from 'lucide-react';
 
 export default function CVManagementSystem() {
-  const [applicants, setApplicants] = useState([
-    {
-      id: 'APP-1001',
-      firstName: 'Weeraphol',
-      lastName: 'Jongsara',
-      gender: 'Male',
-      experience: 7,
-      position: 'Software Engineer',
-      status: 'Applied',
-      cvFile: null,
-      cvFileName: null
-    },
-    {
-      id: 'APP-1002',
-      firstName: 'Jane',
-      lastName: 'Doe',
-      gender: 'Female',
-      experience: 3,
-      position: 'Frontend Developer',
-      status: 'Shortlisted',
-      cvFile: null,
-      cvFileName: null
-    }
-  ]);
+interface Applicant {
+  id: string;
+  firstName: string;
+  lastName: string;
+  gender: string;
+  experience: number;
+  position: string;
+  status: string;
+  cv_url?: string | null;
+}
+
+const [applicants, setApplicants] = useState<Applicant[]>([]);    
 
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
-  const [confirmAction, setConfirmAction] = useState(null);
-  const [selectedApplicant, setSelectedApplicant] = useState(null);
+  const [confirmAction, setConfirmAction] = useState<{ message: string, onConfirm: () => void } | null>(null);
+  const [selectedApplicant, setSelectedApplicant] = useState<Applicant | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [editForm, setEditForm] = useState<{
     id?: string;
@@ -44,8 +33,8 @@ export default function CVManagementSystem() {
     experience?: number;
     position?: string;
     status?: string;
-    cvFile?: string | null;
-    cvFileName?: string | null;
+    cv_url?: string | null;
+
   }>({});
   const [newApplicantForm, setNewApplicantForm] = useState({
     firstName: '',
@@ -90,40 +79,126 @@ export default function CVManagementSystem() {
     setConfirmAction(null);
   };
 
-  const handleFileUpload = (applicantId, file) => {
-    if (file && (file.type === 'application/pdf' || file.name.endsWith('.pdf'))) {
-      setApplicants(prev => prev.map(app => 
-        app.id === applicantId 
-          ? { ...app, cvFile: URL.createObjectURL(file), cvFileName: file.name }
-          : app
-      ));
-      setShowUploadModal(false);
-    } else {
-      alert('Please upload a PDF file only');
+// --- [!!! นี่คือจุดแก้ไข !!!] ---
+// (แก้ไข `handleFileUpload` ให้ตรงตามเป้าหมายของคุณ)
+const handleFileUpload = async (applicantId: string, file: File) => {
+  if (!file) return alert('No file selected');
+  if (file.type !== 'application/pdf') return alert('Please upload a PDF file only');
+
+  try {
+    const filePath = `${applicantId}/${file.name}`;
+
+    // Upload to Supabase Storage
+    const { error: uploadError } = await supabase
+      .storage
+      .from('cv_bucket')
+      .upload(filePath, file, { upsert: true });
+    if (uploadError) throw uploadError;
+
+    // Get public URL
+    const { data } = supabase
+      .storage
+      .from('cv_bucket')
+      .getPublicUrl(filePath);
+    const publicURL = data.publicUrl;
+    
+    // --- 1. [เป้าหมายที่ 1] อัปเดต 'applicants' ด้วย cv_url ---
+    await supabase
+      .from('applicants')
+      .update({ cv_url: publicURL })
+      .eq('id', applicantId);
+
+    // (Show preview immediately - Optional)
+    const updatedApplicant = applicants.find(a => a.id === applicantId);
+    if (updatedApplicant) {
+      setSelectedApplicant({ ...updatedApplicant, cv_url: publicURL });
+      setShowPreviewModal(true);
     }
-  };
 
-  const handleDelete = (id) => {
-    showConfirm(
-      'delete',
-      'Are you sure you want to delete this applicant?',
-      () => {
-        setApplicants(prev => prev.filter(app => app.id !== id));
-      }
-    );
-  };
+   
+    // --- 2. [เป้าหมายที่ 2] เรียก API เพื่อเอา Text ---
+    const response = await fetch('/api/extractCV', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ applicantId, fileUrl: publicURL })
+    });
+    const result = await response.json();
 
-  const handleDeleteCV = (id) => {
-    showConfirm(
-      'delete-cv',
-      'Are you sure you want to delete this CV?',
-      () => {
-        setApplicants(prev => prev.map(app => 
-          app.id === id ? { ...app, cvFile: null, cvFileName: null } : app
-        ));
+    if (!response.ok) {
+        throw new Error(result.error || 'Failed to extract text from API');
+    }
+
+    if (!result.error) {
+      // --- 3. [เป้าหมายที่ 3] บันทึก Text ลงตาราง 'cvs' ---
+      await supabase
+        .from('cvs')
+        .insert([{
+          filename: file.name,
+          text: result.text || '',        // ข้อความที่ extract จาก CV
+          upload_by: applicantId,
+          created_at: new Date().toISOString()
+        }]);
+
+      // --- 4. [ลบออก] ---
+      // (เราจะไม่ update 'applicants' ด้วย firstName, lastName จาก Gemini ที่นี่)
+
+      fetchApplicants();  // รีเฟรชตาราง
+      setShowUploadModal(false);
+      alert('CV uploaded and text saved successfully!'); // เปลี่ยนข้อความ
+    }
+
+  } catch (err: any) {
+    console.error(err);
+    alert(`Upload failed: ${err.message}`);
+  }
+};
+// --- [!!! สิ้นสุดการแก้ไข !!!] ---
+
+
+
+useEffect(() => {
+  fetchApplicants();
+}, []);
+
+const fetchApplicants = async () => {
+  const { data, error } = await supabase
+    .from('applicants')
+    .select('*')
+    .order('id', { ascending: true });
+  if (error) return console.error(error);
+  setApplicants(data);
+};
+
+
+
+  const handleDelete = async (id) => {
+  const { error } = await supabase
+    .from('applicants')
+    .delete() // REPLACE HERE
+    .eq('id', id);
+  if (error) return alert(error.message);
+
+  fetchApplicants();
+};
+
+
+  const handleDeleteCV = (applicant: Applicant) => {
+  showConfirm(
+    'delete-cv',
+    'Are you sure you want to delete this CV?',
+    async () => {
+      if (applicant.cv_url) {
+        const fileName = applicant.cv_url.split('/').pop(); // extract filename
+        await supabase.storage.from('cv_bucket').remove([`${applicant.id}/${fileName}`]);
       }
-    );
-  };
+      await supabase.from('applicants').update({ cv_url: null }).eq('id', applicant.id);
+      await supabase.from('cvs').delete().eq('upload_by', applicant.id);
+
+      fetchApplicants();
+    }
+  );
+};
+
 
   const openPreview = (applicant) => {
     setSelectedApplicant(applicant);
@@ -136,51 +211,41 @@ export default function CVManagementSystem() {
     setShowEditModal(true);
   };
 
-  const handleEditSave = () => {
-    showConfirm(
-      'edit',
-      'Are you sure you want to save these changes?',
-      () => {
-        setApplicants(prev => prev.map(app => 
-          app.id === editForm.id ? { ...app, ...editForm } : app
-        ));
-        setShowEditModal(false);
-      }
-    );
-  };
+  const handleEditSave = async () => {
+  const { data, error } = await supabase
+    .from('applicants')
+    .update({ ...editForm }) // REPLACE HERE
+    .eq('id', editForm.id);
+  if (error) return alert(error.message);
 
-  const handleAddApplicant = () => {
-    if (!newApplicantForm.firstName || !newApplicantForm.lastName || !newApplicantForm.position) {
-      alert('Please fill in all required fields');
-      return;
-    }
+  setShowEditModal(false);
+  fetchApplicants();
+};
 
-    showConfirm(
-      'add',
-      'Are you sure you want to add this applicant?',
-      () => {
-        const newId = `APP-${1000 + applicants.length + 1}`;
-        setApplicants(prev => [...prev, { ...newApplicantForm, id: newId, cvFile: null, cvFileName: null }]);
-        setNewApplicantForm({
-          firstName: '',
-          lastName: '',
-          gender: 'Male',
-          experience: 0,
-          position: '',
-          status: 'Applied'
-        });
-        setShowAddModal(false);
-      }
-    );
-  };
+
+  const handleAddApplicant = async () => {
+  if (!newApplicantForm.firstName || !newApplicantForm.lastName || !newApplicantForm.position) {
+    alert('Please fill in all required fields');
+    return;
+  }
+
+  const { data, error } = await supabase
+    .from('applicants')
+    .insert([{ ...newApplicantForm }]); // REPLACE HERE
+  if (error) return alert(error.message);
+
+  setShowAddModal(false);
+  fetchApplicants();
+};
+
 
   const handleExportCV = (applicant) => {
-    if (!applicant.cvFile) {
+    if (!applicant.cv_url) {
       alert('No CV available to export');
       return;
     }
     const link = document.createElement('a');
-    link.href = applicant.cvFile;
+    link.href = applicant.cv_url;
     link.download = `${applicant.firstName}_${applicant.lastName}_CV.pdf`;
     link.click();
   };
@@ -224,7 +289,7 @@ export default function CVManagementSystem() {
         {/* Header */}
         <div className="mb-8 flex items-center justify-between">
           <div>
-            <h1 className="text-xl font-bold text-slate-800 mb-2">CV Management System</h1>
+            <h1 className="text-3xl font-bold text-slate-800 mb-2">CV Management System</h1>
             <p className="text-slate-600">Manage applicant CVs and information</p>
           </div>
          <button
@@ -255,7 +320,7 @@ export default function CVManagementSystem() {
               <div>
                 <p className="text-sm text-slate-600 mb-1">CVs Uploaded</p>
                 <p className="text-3xl font-bold text-slate-800">
-                  {applicants.filter(a => a.cvFile).length}
+                  {applicants.filter(a => a.cv_url).length}
                 </p>
               </div>
               <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
@@ -386,17 +451,18 @@ export default function CVManagementSystem() {
                       </span>
                     </td>
                     <td className="px-6 py-4">
-                      {app.cvFile ? (
+                      {app.cv_url ? (
                         <div className="flex items-center gap-2">
+                          {showPreviewModal && selectedApplicant?.cv_url && (
+                        <iframe
+                            src={selectedApplicant.cv_url}
+                            className="w-full h-full rounded-lg border border-slate-200"
+                            title="CV Preview"
+                        />
+              )}  
+
                           <button
-                            onClick={() => handleExportCV(app)}
-                            className="text-green-600 hover:text-green-700"
-                            title="Export CV"
-                          >
-                            <Download className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteCV(app.id)}
+                            onClick={() => handleDeleteCV(app)}
                             className="text-red-500 hover:text-red-700"
                             title="Delete CV"
                           >
@@ -420,9 +486,9 @@ export default function CVManagementSystem() {
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => openPreview(app)}
-                          className={`p-2 rounded-lg transition-colors ${app.cvFile ? 'text-blue-600 hover:bg-blue-50' : 'text-slate-300 cursor-not-allowed'}`}
+                          className={`p-2 rounded-lg transition-colors ${app.cv_url ? 'text-blue-600 hover:bg-blue-50' : 'text-slate-300 cursor-not-allowed'}`}
                           title="Preview CV"
-                          disabled={!app.cvFile}
+                          disabled={!app.cv_url}
                         >
                           <Eye className="w-4 h-4" />
                         </button>
@@ -619,25 +685,29 @@ export default function CVManagementSystem() {
                 <Upload className="w-12 h-12 text-slate-400 mx-auto mb-4" />
                 <p className="text-sm text-slate-600 mb-2">Drop your PDF here or click to browse</p>
                 <input
-                  type="file"
-                  accept=".pdf"
-                  onChange={(e) => handleFileUpload(selectedApplicant.id, e.target.files[0])}
-                  className="hidden"
-                  id="cv-upload"
-                />
-                <label
-                  htmlFor="cv-upload"
-                  className="inline-block px-4 py-2 bg-blue-500 text-white rounded-lg cursor-pointer hover:bg-blue-600 transition-colors text-sm"
-                >
-                  Choose File
-                </label>
+  type="file"
+  accept=".pdf"
+  id={`cv-upload-${selectedApplicant?.id}`}
+  onChange={(e) => {
+    if (!e.target.files || !selectedApplicant) return;
+    handleFileUpload(selectedApplicant.id, e.target.files[0]);
+  }}
+  className="hidden"
+/>
+<label
+  htmlFor={`cv-upload-${selectedApplicant?.id}`}
+  className="inline-block px-4 py-2 bg-blue-500 text-white rounded-lg cursor-pointer hover:bg-blue-600 transition-colors text-sm"
+>
+  Choose File
+</label>
+
               </div>
             </div>
           </div>
         )}
 
         {/* Preview Modal */}
-        {showPreviewModal && selectedApplicant?.cvFile && (
+        {showPreviewModal && selectedApplicant?.cv_url && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
             <div className="bg-white rounded-2xl max-w-4xl w-full h-[90vh] flex flex-col shadow-2xl">
               <div className="flex items-center justify-between p-6 border-b border-slate-200">
@@ -654,7 +724,7 @@ export default function CVManagementSystem() {
               </div>
               <div className="flex-1 p-6 overflow-hidden">
                 <iframe
-                  src={selectedApplicant.cvFile}
+                  src={selectedApplicant.cv_url}
                   className="w-full h-full rounded-lg border border-slate-200"
                   title="CV Preview"
                 />

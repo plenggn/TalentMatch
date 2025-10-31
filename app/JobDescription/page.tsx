@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { Search, FileText, MapPin, Briefcase, DollarSign, Filter, X } from "lucide-react";
-import { supabase } from "../../lib/supabaseClient"; // Adjust path if needed
+import { supabase } from "../../lib/supabaseClient"; 
 
 // Match your Supabase table columns
 interface JobPosting {
@@ -142,11 +142,9 @@ const JobDescriptionPage = () => {
         {/* Header */}
         <div className="flex justify-between items-start mb-10">
           <div className="flex items-center space-x-3 mb-3">
-            <div className="p-3 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-lg">
-              <FileText className="w-8 h-8 text-white" />
-            </div>
+          
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Job Description</h1>
+              <h1 className="text-3xl font-bold text-gray-900 mb-1">Job Description</h1>
               <p className="text-sm text-gray-600 mt-1">Job profiles for AI-powered CV matching</p>
             </div>
           </div>
