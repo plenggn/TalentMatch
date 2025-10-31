@@ -1,5 +1,5 @@
-// app/CVSummary/page.tsx (Minimalist AI Report Design - A4 Optimized Final)
 "use client";
+
 import React, { useState, useEffect, useRef, useMemo, Suspense } from "react"; 
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '../../lib/supabaseClient'; 
