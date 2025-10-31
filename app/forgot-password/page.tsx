@@ -85,7 +85,7 @@ export default function ForgotPasswordPage() {
             color: '#515151',
             margin: '0.25rem 0 0 0'
           }}>
-            Enter your email and we'll send you a link to reset it.
+            Enter your email and we ll send you a link to reset it.
           </p>
         </div>
         

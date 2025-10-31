@@ -979,7 +979,7 @@ export default function CVSummaryApp() {
                </h3>
                <div className={`p-4 rounded-xl bg-[#14ADD6]/10 border border-[#14ADD6]/30 text-gray-800 shadow-md`}>
                    <p className="text-lg font-extrabold mb-2">
-                       "Appropriate for Interview."
+                       Appropriate for Interview.
                    </p>
                    <p className="text-sm">
                        {candidateData.overview}
@@ -1003,7 +1003,7 @@ export default function CVSummaryApp() {
                       <h4 className="text-lg font-semibold text-green-600 flex items-center gap-2">
                          <Check size={20}/> Final Offer Communication
                       </h4>
-                      <p className="text-sm text-gray-600">Generate a personalized offer letter draft highlighting the candidate's specific strengths (based on AI analysis).</p>
+                      <p className="text-sm text-gray-600">Generate a personalized offer letter draft highlighting the candidate s specific strengths (based on AI analysis).</p>
                       <button 
                           onClick={() => handleDraftEmail('offer')}
                           disabled={isDrafting}

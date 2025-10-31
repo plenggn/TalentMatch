@@ -93,7 +93,7 @@ export default function SignInPage() {
         </div>
 
         <p className="account-prompt">
-          Don't have an account? <Link href="/signup" className="signup-link">Sign Up</Link>
+          Don t have an account? <Link href="/signup" className="signup-link">Sign Up</Link>
         </p>
       </div>
 

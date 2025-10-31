@@ -132,7 +132,7 @@ export default function LandingPage() {
         </div>
 
         <p className="text-[24px] font-normal leading-[24px] text-center">
-          <span className="text-[#898989]">Don't have an account? </span>
+          <span className="text-[#898989]">Don t have an account? </span>
           <Link href="/signup" className="text-[#3567FF] no-underline hover:underline">
             Sign Up
           </Link>
