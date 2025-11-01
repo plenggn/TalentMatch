@@ -4,7 +4,7 @@ import { supabaseAdminClient } from "../../../lib/supabaseAdminClient";
 import { NextRequest, NextResponse } from "next/server";
 
 // --- Configuration ---
-const GEMINI_MODEL = "gemini-2.5-pro"; // ใช้ Pro model เพื่อคุณภาพการเขียนและเหตุผลที่ซับซ้อน
+const GEMINI_MODEL = "gemini-2.5-pro"; // (ใช้ Model เดิมของคุณ)
 const MAX_TOKENS = 2000;
 
 const geminiApiKey = process.env.GOOGLE_API_KEY;
@@ -14,14 +14,16 @@ if (!geminiApiKey) {
 const genAI = new GoogleGenerativeAI(geminiApiKey);
 
 // -------------------------------------------------------
-// Helper: Get AI Data from DB (เหมือนเดิม)
+// Helper: Get AI Data from DB
 // -------------------------------------------------------
 async function getApplicantAnalysisData(applicantId: string) {
+    // (ดึงข้อมูลผู้สมัคร พร้อม Join ชื่อตำแหน่ง)
     const { data, error } = await supabaseAdminClient
         .from('applicants')
         .select(`
-            firstName, lastName, position, status,
-            ai_summary, overview, strengths, potential_gaps
+            firstName, lastName, status,
+            ai_summary, overview, strengths, potential_gaps,
+            job_descriptions ( title )
         `)
         .eq('id', applicantId)
         .single();
@@ -29,17 +31,26 @@ async function getApplicantAnalysisData(applicantId: string) {
     if (error || !data) {
         throw new Error(`Applicant analysis data not found for ID: ${applicantId}.`);
     }
-    return data;
+    
+    // (จัดการข้อมูลที่ Join มา)
+    const positionTitle = (data.job_descriptions as any)?.title || "the position";
+
+    return {
+        ...data,
+        position: positionTitle, 
+    };
 }
 
 // -------------------------------------------------------
-// Helper: Build Gemini Prompt (เหมือนเดิม)
+// Helper: Build Gemini Prompt
 // -------------------------------------------------------
-function buildEmailPrompt(data: any, emailType: 'offer' | 'rejection') {
+// --- [!!! 1. MODIFY PROMPT HELPER !!!] ---
+function buildEmailPrompt(data: any, emailType: 'offer' | 'rejection', hrName: string) {
     const { firstName, lastName, position, strengths, potential_gaps } = data;
     const name = `${firstName} ${lastName}`;
     const strengthsList = strengths.map((s: string) => ` - ${s}`).join('\n');
     const gapsList = potential_gaps.map((g: string) => ` - ${g}`).join('\n');
+    const signature = hrName || "HR Team"; // (Fallback)
 
     if (emailType === 'offer') {
         return `
@@ -48,12 +59,14 @@ function buildEmailPrompt(data: any, emailType: 'offer' | 'rejection') {
             
             **Candidate**: ${name}
             **Position Offered**: ${position}
+            **Your (HR) Name**: ${signature}
             
             **Instructions**:
             1. Use a professional and friendly tone.
             2. In the body, reference their core strengths (from the Strengths list) to explain WHY they were chosen.
             3. Clearly state the position and invite them to accept.
             4. The response MUST be ONLY the complete email draft in **Markdown format**.
+            5. Sign off using the **Your (HR) Name** (e.g., "Sincerely,\n${signature}").
             
             --- Candidate Strengths ---
             ${strengthsList || "No specific strengths identified, focus on the overall profile."}
@@ -65,18 +78,21 @@ function buildEmailPrompt(data: any, emailType: 'offer' | 'rejection') {
             
             **Candidate**: ${name}
             **Position Applied**: ${position}
+            **Your (HR) Name**: ${signature}
             
             **Instructions**:
             1. Use a professional, empathetic tone.
             2. State clearly that they will not be moving forward.
             3. Crucially: Use the Potential Gaps list to provide **CONSTRUCTIVE, ACTIONABLE feedback** on skills they should develop for future opportunities. Avoid negative phrasing.
             4. The response MUST be ONLY the complete email draft in **Markdown format**.
+            5. Sign off using the **Your (HR) Name** (e.g., "Sincerely,\n${signature}").
             
             --- Candidate Potential Gaps ---
             ${gapsList || "No specific gaps were identified in the analysis."}
         `;
     }
 }
+// --- [!!! END MODIFY !!!] ---
 
 
 // -------------------------------------------------------
@@ -84,20 +100,23 @@ function buildEmailPrompt(data: any, emailType: 'offer' | 'rejection') {
 // -------------------------------------------------------
 export async function POST(req: NextRequest) {
     try {
-        const { applicantId, emailType } = await req.json(); // emailType: 'offer' | 'rejection'
+        // --- [!!! 2. MODIFY API BODY !!!] ---
+        const { applicantId, emailType, hrName } = await req.json(); // (ADDED hrName)
+        // --- [!!! END MODIFY !!!] ---
 
         if (!applicantId || !emailType) {
             return NextResponse.json({ error: "Missing applicantId or emailType" }, { status: 400 });
         }
 
         const analysisData = await getApplicantAnalysisData(applicantId);
-        const prompt = buildEmailPrompt(analysisData, emailType);
+        // --- [!!! 3. MODIFY PROMPT CALL !!!] ---
+        const prompt = buildEmailPrompt(analysisData, emailType, hrName); // (ADDED hrName)
+        // --- [!!! END MODIFY !!!] ---
 
         const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
 
         const result = await model.generateContent({
             contents: [{ role: "user", parts: [{ text: prompt }] }],
-            // ✅ FIX: ลบคีย์ 'config' ที่ซ้ำซ้อนออก และยก generationConfig ขึ้นมา
             generationConfig: { 
                 maxOutputTokens: MAX_TOKENS,
                 temperature: 0.7, 

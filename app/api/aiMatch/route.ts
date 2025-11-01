@@ -1,8 +1,9 @@
-// app/api/aiMatch/route.ts (FINAL FIX: Upsert into applicant_job_matches for Persistency)
+// app/api/aiMatch/route.ts
 import { supabaseAdminClient } from "../../../lib/supabaseAdminClient";
 import { NextRequest, NextResponse } from "next/server";
 
 // --- Configuration ---
+// (ใช้ Model Name เดิมของคุณ)
 const GEMINI_MODEL_NAME = "gemini-2.5-pro"; 
 const MAX_APPLICANTS_TO_PROCESS = 10;
 const MAX_JOBS_TO_PROCESS = 20;
@@ -15,9 +16,8 @@ const visionApiKey = process.env.GOOGLE_VISION_API_KEY;
 if (!geminiApiKey) { throw new Error("Missing GOOGLE_API_KEY (for Gemini) from .env.local"); }
 if (!visionApiKey) { throw new Error("Missing GOOGLE_VISION_API_KEY (for Vision) from .env.local"); }
 
-// (Helper Functions: getTextFromPDF_VisionAPI และ getAIRankingFromText_Fetch) 
-// โค้ดส่วนนี้ยังคงอยู่เหมือนเดิมและสมมติว่าถูกต้อง
-async function getTextFromPDF_VisionAPI(pdfBuffer: Buffer): Promise<string> { /* ... โค้ดเหมือนเดิม ... */ 
+// (Helper Functions: getTextFromPDF_VisionAPI)
+async function getTextFromPDF_VisionAPI(pdfBuffer: Buffer): Promise<string> { 
   console.log("Calling Google Vision REST API (using Vision Key) to extract text..."); 
   const pdfBufferAsBase64 = pdfBuffer.toString('base64'); 
   const visionApiUrl = `https://vision.googleapis.com/v1/files:annotate?key=${visionApiKey}`; 
@@ -25,16 +25,18 @@ async function getTextFromPDF_VisionAPI(pdfBuffer: Buffer): Promise<string> { /*
   try { const visionResponse = await fetch(visionApiUrl, { method: 'POST', body: JSON.stringify(requestPayload), headers: { 'Content-Type': 'application/json' }, }); const result = await visionResponse.json(); if (!visionResponse.ok) { const errorDetails = result.error?.message || JSON.stringify(result); throw new Error(`Google Vision API Error: ${errorDetails}`); } const fileResponseData = result.responses?.[0]; let extractedText = ""; if (fileResponseData?.responses) { for (const pageResponse of fileResponseData.responses) { if (pageResponse.fullTextAnnotation) { extractedText += pageResponse.fullTextAnnotation.text + "\n"; } } } if (!extractedText) { if (fileResponseData?.error) throw new Error(`Google Vision API Error: ${fileResponseData.error.message}`); console.warn("Vision API did not return text.", JSON.stringify(result, null, 2)); throw new Error("Vision API could not extract text."); } console.log("Google Vision API extracted text successfully."); return extractedText; } catch (error: any) { console.error("Vision API call failed:", error.message); throw error; } 
 }
 
+// (Helper Function: getAIRankingFromText_Fetch)
 async function getAIRankingFromText_Fetch(cvText: string, jdText: string): Promise<{ 
   score: number; 
   summary: string; 
   overview?: string; 
   strengths?: string[]; 
   potential_gaps?: string[];
-  potential_prediction?: string; // NEW
-  personality_inference?: string; // NEW
+  potential_prediction?: string; 
+  personality_inference?: string; 
 }> { 
   console.log(`Calling Gemini API (${GEMINI_MODEL_NAME}) via Fetch with English prompt...`); 
+  // (ใช้ v1beta ตามเดิม)
   const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL_NAME}:generateContent?key=${geminiApiKey}`; 
   const promptText = `
     Analyze the following CV text and Job Description (JD) text carefully.
@@ -65,7 +67,6 @@ async function getAIRankingFromText_Fetch(cvText: string, jdText: string): Promi
     cleanedText = cleanedText.trim(); 
     const aiResult = JSON.parse(cleanedText); 
     if (typeof aiResult.matchingScore === 'undefined' || typeof aiResult.aiSummary === 'undefined') { console.warn("AI response JSON missing required keys:", cleanedText); throw new Error("AI response JSON missing required keys."); } 
-    // ✅ Mapping ค่าใหม่กลับมา
     return { 
       score: parseInt(aiResult.matchingScore) || 0, 
       summary: aiResult.aiSummary || "No summary provided.", 
@@ -87,13 +88,13 @@ async function getAIRankingFromText_Fetch(cvText: string, jdText: string): Promi
 }
 
 
-// --- Main API Handler (FIXED) ---
+// --- Main API Handler ---
 export async function POST(req: NextRequest) {
   try {
     const { mode, targetId }: { mode: MatchMode, targetId: string } = await req.json();
     if (!mode || !targetId) { return NextResponse.json({ error: "Missing 'mode' or 'targetId'" }, { status: 400 }); }
 
-    // --- Mode 1: Find Best Applicants for a Job (FIXED LOGIC for Persistency) ---
+    // --- Mode 1: Find Best Applicants for a Job ---
     if (mode === 'jobToApplicants') {
       const jobId = targetId;
       const { data: jobData, error: jobError } = await supabaseAdminClient.from('job_descriptions').select('description, title').eq('id', jobId).single();
@@ -101,16 +102,18 @@ export async function POST(req: NextRequest) {
       const jdText = jobData.description; 
       const jobTitle = jobData.title;
       
-      // 1. ดึง Applicants ใหม่ที่ยังไม่มีคะแนน (ทุกคนที่มี CV)
+      // (ดึง Applicants ที่สมัคร "Job นี้" และมี CV - Logic นี้ถูกต้องตามที่คุณต้องการ)
       const { data: applicantsToProcess, error: appError } = await supabaseAdminClient
         .from('applicants')
         .select('id, firstName, lastName, cv_url')
-        .not('cv_url', 'is', null) // ต้องมี CV
+        .not('cv_url', 'is', null) 
+        .eq('job_id', jobId) // <-- (FIX) กรองเฉพาะคนที่สมัคร Job นี้
         .limit(MAX_APPLICANTS_TO_PROCESS);
       
       if (appError) console.error("Error fetching applicants:", appError.message);
+      
       if (!applicantsToProcess || applicantsToProcess.length === 0) {
-           return NextResponse.json({ results: [], message: "No CVs found to process." });
+           return NextResponse.json({ results: [], message: "No applicants (with CVs) have applied for this specific job." }); 
       }
 
       // 2. ประมวลผล Applicants
@@ -132,12 +135,11 @@ export async function POST(req: NextRequest) {
           potential_prediction = analysisResult.potential_prediction;
           personality_inference = analysisResult.personality_inference;
           
-          // 3. 🔑 FIX: Upsert ผลลัพธ์ลงในตาราง applicant_job_matches แทนตาราง applicants
-          const { error: upsertError } = await supabaseAdminClient
-            .from('applicant_job_matches')
-            .upsert({ 
-              applicant_id: id,
-              job_id: jobId,
+          // --- [!!! นี่คือจุดแก้ไข (แก้ Error Log) !!!] ---
+          // (เปลี่ยนจาก 'applicant_job_matches' เป็น 'applicants' และใช้ .update)
+          const { error: updateError } = await supabaseAdminClient
+            .from('applicants') // <-- (FIX 1)
+            .update({ 
               matching_score: score,
               ai_summary: summary,
               overview: overview, 
@@ -145,28 +147,30 @@ export async function POST(req: NextRequest) {
               potential_gaps: potential_gaps, 
               potential_prediction: potential_prediction,
               personality_inference: personality_inference,
-            }, { 
-               onConflict: 'applicant_id, job_id', // Key สำหรับ Upsert
-               ignoreDuplicates: false, // บังคับอัพเดท
-            });
+            })
+            .eq('id', id); // <-- (FIX 2)
 
-          if (upsertError) console.error(`Failed to upsert match result for ${id} and ${jobId}: ${upsertError.message}`);
+          if (updateError) console.error(`Failed to update applicant ${id} with match results: ${updateError.message}`);
+          // --- [!!! สิ้นสุดการแก้ไข !!!] ---
 
         } catch (processError: any) { 
           console.error(`Failed processing applicant ${id}: ${processError.message}`); 
           summary = `Processing failed: ${processError.message.substring(0, 150)}`; 
-          // หากเกิด error ก็ยัง Upsert ข้อมูล 0% พร้อม error message
+          
+          // --- [!!! นี่คือจุดแก้ไข (Error Handling) !!!] ---
           try { 
-              await supabaseAdminClient.from('applicant_job_matches').upsert({ 
-                  applicant_id: id,
-                  job_id: jobId,
+              await supabaseAdminClient
+                .from('applicants') // <-- (FIX 3)
+                .update({ 
                   matching_score: 0,
                   ai_summary: summary,
                   overview: "Processing failed.",
                   strengths: [],
                   potential_gaps: [],
-              }, { onConflict: 'applicant_id, job_id' });
+                })
+                .eq('id', id); // <-- (FIX 4)
           } catch (dbError) { console.error(`Failed update DB error status for ${id}:`, dbError); } 
+          // --- [!!! สิ้นสุดการแก้ไข !!!] ---
         }
         
         // 4. ส่งผลลัพธ์ใหม่กลับไป Frontend
@@ -174,13 +178,12 @@ export async function POST(req: NextRequest) {
           id, name: `${firstName} ${lastName}`, matching_score: score, ai_summary: summary, cvUrl: cv_url,
           matched_job_id: jobId,
           matched_job_title: jobTitle,
-          is_locked: true, // ระบุว่าผลลัพธ์นี้ถูกล็อกแล้ว
+          is_locked: true, 
         };
       });
       
       let finalResults = (await Promise.all(rankingPromises)).filter(r => r !== null);
       
-      // จัดอันดับและส่ง Top 10 กลับ
       finalResults.sort((a, b) => (b?.matching_score || 0) - (a?.matching_score || 0));
       const top10 = finalResults.slice(0, 10);
       
@@ -195,7 +198,6 @@ export async function POST(req: NextRequest) {
         let cvText: string; try { cvText = await getTextFromPDF_VisionAPI(pdfBuffer); } catch (visionError: any) { console.error(`Vision API failed for applicant ${applicantId} CV: ${visionError.message}`); throw new Error(`Could not read CV using Vision API: ${visionError.message}`); }
         const resultsPromises = jobs.map(async (job) => {
             const jdText = job.description; let score = 0; let summary = `Processing failed for Job ${job.id}`;
-            // โค้ดนี้ไม่บันทึกใน DB แต่ก็ต้องเรียก Analysis ที่สมบูรณ์
             try { 
               const analysisResult = await getAIRankingFromText_Fetch(cvText, jdText); 
               score = analysisResult.score; 

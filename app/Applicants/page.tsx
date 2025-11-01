@@ -4,6 +4,7 @@ import { Search, ChevronDown, Users, RefreshCw, Eye } from "lucide-react";
 import { supabase } from "../../lib/supabaseClient"; 
 import { useRouter } from "next/navigation";
 
+// --- [1. MODIFY INTERFACE] --- (Interface นี้ถูกต้องแล้ว)
 interface Applicant {
   id: number | string; 
   empId: string;
@@ -11,8 +12,11 @@ interface Applicant {
   lastName: string;
   gender: string;
   experience: string;
-  position: string;
-  // 💡 FIX: เปลี่ยน status ให้ใช้ "Interviewed" และ "Offered" เพื่อให้ตรงกับ DB/UI อื่น ๆ
+  job_id: string | null; 
+  job_descriptions?: { 
+    id: string;
+    title: string;
+  } | null;
   status: "Applied" | "Shortlisted" | "Interviewed" | "Offered" | "Rejected"; 
   matchingScore: number;
   potentialPrediction?: string; 
@@ -26,35 +30,32 @@ const ApplicantsDashboard = () => {
 
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+  
   const [filters, setFilters] = useState({
-    gender: "All",
-    experience: "All",
-    position: "All",
-    matchingScore: "All",
+    position: "All", 
     status: "All",
-    pssScore: "All",
   });
+
+
 
   const itemsPerPage = 10;
 
-  //State สำหรับ positions dynamic
+  //State สำหรับ positions dynamic (เก็บ title)
   const [positionsOptions, setPositionsOptions] = useState<string[]>(["All"]);
 
   // 🔹 FILTER_OPTIONS dynamic
-  // 💡 FIX: ขยายช่วงคะแนน
   const SCORE_RANGES = ["All", "0-20%", "21-40%", "41-60%", "61-80%", "81-100%"];
 
+  // --- [!!! 3. MODIFY FILTER_OPTIONS !!!] ---
+  // (ลบ genders, experiences, matchingScores, pssScores ออก)
   const FILTER_OPTIONS = {
-    genders: ["All", "Male", "Female"],
-    experiences: ["All", "2", "3", "4", "5", "6", "7", "8", "9", "10+"],
     positions: positionsOptions, 
-    matchingScores: SCORE_RANGES,
-    // 💡 FIX: ใช้ "Interviewed" และ "Offered" ใน Filter Option
     statuses: ["All", "Applied", "Shortlisted", "Interviewed", "Offered", "Rejected"], 
-    pssScores: SCORE_RANGES,
   };
+  // --- [!!! END MODIFY !!!] ---
 
-  // --- PSS Calculation Logic ---
+
+  // --- PSS Calculation Logic (เหมือนเดิม) ---
   const calculatePSS = (applicant: Applicant): number => {
     const matchingScore = applicant.matchingScore || 0;
     
@@ -89,81 +90,102 @@ const ApplicantsDashboard = () => {
   const [allApplicants, setAllApplicants] = useState<Applicant[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // --- [DATA FETCHING] --- (ส่วนนี้ถูกต้องแล้ว)
   useEffect(() => {
-    const fetchApplicants = async () => {
+    const fetchData = async () => {
       setLoading(true);
-      const { data, error } = await supabase.from("applicants").select("*");
-      if (error) {
-        console.error("❌ Error fetching applicants:", error);
-      } else {
-        const formatted = data.map((a: any) => {
-            const app: Applicant = {
-                id: a.id,       
-                empId: a.emp_id || a.id,    
-                firstName: a.firstName || "-",
-                lastName: a.lastName || "-",
-                gender: a.gender || "-",
-                experience: a.experience || "-",
-                position: a.position || "-",
-                matchingScore: a.matching_score || 0,
-                // 💡 FIX: Mapping status จาก DB (Interviewed/Offered) ไปยัง Interface ใหม่
-                status: (a.status || "Applied") as "Applied" | "Shortlisted" | "Interviewed" | "Offered" | "Rejected", 
-                potentialPrediction: a.potential_prediction || "",
-                personalityInference: a.personality_inference || "",
-            };
-            app.pssScore = calculatePSS(app);
-            return app;
-        });
+      let applicantPositions: string[] = []; 
+      let applicantsData: Applicant[] = []; 
 
-        setAllApplicants(formatted);
-        const uniquePositions = Array.from(
-          new Set(formatted.map((d: any) => d.position).filter(Boolean))
+      // --- 1. ดึงข้อมูล Applicants (Join ตาราง job_descriptions) ---
+      const { data: appData, error: appError } = await supabase
+        .from("applicants")
+        .select(`
+            *, 
+            job_descriptions ( id, title )
+        `); 
+
+      if (appError) {
+        console.error("Error fetching applicants:", appError);
+      } else {
+        const formatted = appData.map((a: any) => {
+          const app: Applicant = {
+            id: a.id,
+            empId: a.emp_id || a.id,
+            firstName: a.firstName || "-",
+            lastName: a.lastName || "-",
+            gender: a.gender || "-",
+            experience: a.experience || "-",
+            job_id: a.job_id || null, 
+            job_descriptions: a.job_descriptions || null, 
+            matchingScore: a.matching_score || 0,
+            status: (a.status || "Applied") as
+              | "Applied"
+              | "Shortlisted"
+              | "Interviewed"
+              | "Offered"
+              | "Rejected",
+            potentialPrediction: a.potential_prediction || "",
+            personalityInference: a.personality_inference || "",
+          };
+          app.pssScore = calculatePSS(app);
+          return app;
+        });
+        
+        applicantsData = formatted;
+        applicantPositions = Array.from(
+          new Set(formatted.map((d: any) => d.job_descriptions?.title).filter(Boolean))
         );
-        setPositionsOptions(["All", ...uniquePositions]);
       }
+      setAllApplicants(applicantsData); 
+
+      // --- 2. ดึงข้อมูล Job Descriptions (สำหรับ Filter) ---
+      const { data: jobsData, error: jobsError } = await supabase
+        .from("job_descriptions")
+        .select("title"); 
+
+      if (jobsError) {
+        console.error("❌ Error fetching job descriptions:", jobsError);
+        setPositionsOptions(["All", ...applicantPositions.sort()]);
+      } else {
+        const jobPositions = Array.from(
+          new Set(jobsData.map((job: any) => job.title).filter(Boolean))
+        );
+
+        // --- 3. รวม Lists และตั้งค่า State ---
+        const allPositions = Array.from(
+          new Set([...applicantPositions, ...jobPositions]) 
+        );
+        setPositionsOptions(["All", ...allPositions.sort()]); 
+      }
+
       setLoading(false);
     };
 
-    fetchApplicants();
-  }, []);
+    fetchData();
+  }, []); 
+  // --- [END DATA FETCHING] ---
 
-  // 🔹 Filtering Logic
+
+  // --- [!!! 4. MODIFY FILTERING LOGIC !!!] ---
   const filteredApplicants = useMemo(() => {
     return allApplicants.filter((a) => {
+      
       const searchMatch =
         searchTerm === "" ||
         a.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
         a.empId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        a.position.toLowerCase().includes(searchTerm.toLowerCase());
+        (a.job_descriptions?.title || "").toLowerCase().includes(searchTerm.toLowerCase()); 
 
-      const genderMatch = filters.gender === "All" || a.gender === filters.gender;
-      const expMatch =
-        filters.experience === "All"
-        ? true
-        : filters.experience === "10+"
-          ? Number(a.experience) >= 10
-          : Number(a.experience) === Number(filters.experience);
-
-      const posMatch = filters.position === "All" || a.position === filters.position;
+      // (ลบ genderMatch, expMatch, scoreMatch, pssMatch)
+      const posMatch = filters.position === "All" || (a.job_descriptions?.title || "") === filters.position;
       const statusMatch = filters.status === "All" || a.status === filters.status;
 
-      // Matching Score Filtering Logic (ใช้ช่วงใหม่)
-      let scoreMatch = true;
-      if (filters.matchingScore !== "All") {
-        const [min, max] = filters.matchingScore.replace('%', '').split('-').map(s => parseInt(s));
-        scoreMatch = a.matchingScore >= min && a.matchingScore <= max;
-      }
-      
-      // PSS Filtering Logic (ใช้ช่วงใหม่)
-      let pssMatch = true;
-      if (filters.pssScore !== "All") {
-        const [min, max] = filters.pssScore.replace('%', '').split('-').map(s => parseInt(s));
-        pssMatch = (a.pssScore || 0) >= min && (a.pssScore || 0) <= max;
-      }
-
-      return searchMatch && genderMatch && expMatch && posMatch && scoreMatch && statusMatch && pssMatch;
+      return searchMatch && posMatch && statusMatch; // (เหลือแค่ 3 เงื่อนไข)
     });
   }, [allApplicants, searchTerm, filters]);
+  // --- [!!! END MODIFY !!!] ---
+
 
   const totalApplicants = filteredApplicants.length;
   const totalPages = Math.ceil(totalApplicants / itemsPerPage);
@@ -171,19 +193,17 @@ const ApplicantsDashboard = () => {
   const endIndex = startIndex + itemsPerPage;
   const currentApplicants = filteredApplicants.slice(startIndex, endIndex);
 
+  // --- [!!! 5. MODIFY RESET FILTERS !!!] ---
   const resetFilters = () => {
     setFilters({
-      gender: "All",
-      experience: "All",
       position: "All",
-      matchingScore: "All",
       status: "All",
-      pssScore: "All",
     });
     setSearchTerm("");
   };
+  // --- [!!! END MODIFY !!!] ---
+
   
-  // 💡 FIX: Status Classes ใช้ "Interviewed" และ "Offered"
   const STATUS_CLASSES: Record<string, string> = {
     Applied: "text-blue-800 bg-blue-100",
     Shortlisted: "text-blue-700 bg-blue-200",
@@ -211,15 +231,16 @@ const ApplicantsDashboard = () => {
       router.push(`/CVSummary?applicantId=${applicantId}`);
   };
 
-  // 💡 FIX: Summary Counts ใช้ "Interviewed" และ "Offered"
   const summary = useMemo(() => ({
     all: allApplicants.length,
-    male: allApplicants.filter(a => a.gender === "Male").length,
-    female: allApplicants.filter(a => a.gender === "Female").length,
+    applied: allApplicants.filter(a => a.status === "Applied").length, // (Added)
     shortlisted: allApplicants.filter(a => a.status === "Shortlisted").length,
-    interview: allApplicants.filter(a => a.status === "Interviewed").length, // ✅ Corrected string
-    offer: allApplicants.filter(a => a.status === "Offered").length,         // ✅ Corrected string
+    interview: allApplicants.filter(a => a.status === "Interviewed").length,
+    offer: allApplicants.filter(a => a.status === "Offered").length,
+    rejected: allApplicants.filter(a => a.status === "Rejected").length, // (Added)
   }), [allApplicants]);
+
+
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
@@ -233,29 +254,29 @@ const ApplicantsDashboard = () => {
           <p className="text-gray-600">Search, filter, and view all applicants</p>
         </div>
 
-        {/* Summary Cards */}
+       {/* --- [!!! 7. MODIFY SUMMARY CARDS (FIXED) !!!] --- */}
         <div className="grid grid-cols-6 gap-4 mb-8">
           {[
             { title: "All", value: summary.all, color: "from-blue-500 to-indigo-500" },
-            { title: "Male", value: summary.male, color: "from-cyan-400 to-blue-500" },
-            { title: "Female", value: summary.female, color: "from-pink-400 to-rose-500" },
+            { title: "Applied", value: summary.applied, color: "from-cyan-400 to-blue-500" },
             { title: "Shortlisted", value: summary.shortlisted, color: "from-blue-400 to-indigo-400" },
-            // 💡 FIX: Updated titles to match corrected counts
             { title: "Interviewed", value: summary.interview, color: "from-purple-400 to-violet-500" }, 
             { title: "Offered", value: summary.offer, color: "from-green-400 to-emerald-500" },
+            { title: "Rejected", value: summary.rejected, color: "from-red-400 to-pink-500" },
           ].map((card) => (
             <div
               key={card.title}
               className={`rounded-2xl bg-gradient-to-r ${card.color} text-white shadow-lg p-5 flex flex-col items-center justify-center hover:shadow-xl transition-all`}
             >
               <div className="text-2xl font-bold">{card.value}</div>
-              {/* Render shortened title for display consistency */}
-              <div className="text-sm uppercase tracking-wide">{card.title.replace('ed', '')}</div> 
+              {/* [!!! FIXED !!!] (ลบ .replace('ed', '') ออก) */}
+              <div className="text-sm uppercase tracking-wide">{card.title}</div>
             </div>
           ))}
         </div>
+        {/* --- [!!! END MODIFY !!!] --- */}
 
-        {/* Search and Filters */}
+        {/* --- [!!! 8. MODIFY SEARCH/FILTERS !!!] --- */}
         <div className="bg-white/70 backdrop-blur rounded-2xl shadow-md p-6 mb-6">
           <div className="flex justify-between items-center mb-4">
             <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Filter Applicants</h3>
@@ -268,7 +289,8 @@ const ApplicantsDashboard = () => {
           </div>
 
           <div className="grid grid-cols-12 gap-4 items-end">
-            <div className="col-span-12 md:col-span-4">
+            {/* (Search Bar: ปรับ col-span) */}
+            <div className="col-span-12 md:col-span-6"> 
               <label className="block text-sm font-medium text-gray-700 mb-2">Quick Search</label>
               <div className="relative">
                 <input
@@ -281,15 +303,12 @@ const ApplicantsDashboard = () => {
               </div>
             </div>
 
-            {/* Adjusted grid for 5 filters */}
-            <div className="col-span-12 md:col-span-8 grid grid-cols-5 gap-3">
+            {/* (Filters: ปรับ col-span และ grid-cols) */}
+            <div className="col-span-12 md:col-span-6 grid grid-cols-2 gap-3">
               {
-                [
+                [ // (เหลือ 2 filters)
                     { key: 'positions', stateKey: 'position', label: 'Position' },
-                    { key: 'experiences', stateKey: 'experience', label: 'Experience' },
                     { key: 'statuses', stateKey: 'status', label: 'Status' },
-                    { key: 'matchingScores', stateKey: 'matchingScore', label: 'Match Score' }, 
-                    { key: 'pssScores', stateKey: 'pssScore', label: 'PSS Score' }, 
                 ].map((filterDef) => {
                 const key = filterDef.key as keyof typeof FILTER_OPTIONS;
                 const options = FILTER_OPTIONS[key] as string[];
@@ -317,8 +336,10 @@ const ApplicantsDashboard = () => {
             </div>
           </div>
         </div>
+        {/* --- [!!! END MODIFY !!!] --- */}
 
-        {/* Table */}
+
+        {/* Table (ส่วนนี้ถูกต้องแล้ว ไม่ต้องแก้ไข) */}
         <div className="bg-white/80 backdrop-blur rounded-2xl shadow-md overflow-hidden">
           <div className="flex justify-between items-center px-6 py-4 border-b border-gray-200">
             <h2 className="text-xl font-semibold text-gray-900">Applicants</h2>
@@ -351,12 +372,14 @@ const ApplicantsDashboard = () => {
                       <td className="px-6 py-4 text-gray-700">{String(startIndex + i + 1).padStart(2, "0")}</td>
                       <td className="px-6 py-4 font-medium text-gray-900">{a.empId}</td>
                       <td className="px-6 py-4 text-gray-800">{a.firstName} {a.lastName}</td>
-                      <td className="px-6 py-4">{a.position}</td>
-                      {/* Match Score */}
+                      
+                      <td className="px-6 py-4">
+                         {a.job_descriptions?.title || (a.job_id ? <span className="text-red-500 text-xs">Job ID not found</span> : <span className="text-gray-400">N/A</span>)}
+                      </td>
+                      
                       <td className="px-6 py-4 font-semibold text-blue-600">
                          {a.matchingScore}%
                       </td>
-                      {/* ✅ PSS Score */}
                       <td className="px-6 py-4 font-semibold text-purple-600">
                          {a.pssScore}%
                       </td>

@@ -4,9 +4,12 @@
 import React, { useState, useEffect, useRef, useMemo, Suspense } from "react"; 
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '../../lib/supabaseClient'; 
-import { FileText, Download, Printer, ChevronDown, X, BarChart2, Star, Zap, AlertTriangle, Check, ArrowLeft, Loader2, Mail, Users, HardHat, GraduationCap, Clock, TrendingUp, Cpu, Heart, MessageSquare, Eye, Send, Sparkles, Brain, ClipboardCheck, ArrowUpRight } from "lucide-react"; 
+import { FileText, Download, Printer, ChevronDown, X, BarChart2, Star, Zap, AlertTriangle, Check, ArrowLeft, Loader2, Mail, Phone, Users, HardHat, GraduationCap, Clock, TrendingUp, Cpu, Heart, MessageSquare, Eye, Send, Sparkles, Brain, ClipboardCheck, ArrowUpRight } from "lucide-react";
 import Link from "next/link"; 
 import Image from "next/image"; 
+
+import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } from "docx";
+import { saveAs } from "file-saver";
 
 // --- Color & Style Definitions (เหมือนเดิม) ---
 const PRIMARY_COLOR_LIGHT = '#14ADD6'; // Cyan-Blue
@@ -30,8 +33,10 @@ interface CandidateReport {
   potential_gaps: string[];
   cv_url?: string;
   emp_id?: string;
-  potential_prediction?: string; // ✅ PSS Source
-  personality_inference?: string; // ✅ PSS Source
+  email: string; 
+  phone: string;
+  potential_prediction?: string; //  PSS Source
+  personality_inference?: string; //  PSS Source
 }
 
 const STATUS_OPTIONS = ["Applied", "Shortlisted", "Interviewed", "Offered", "Rejected"];
@@ -486,16 +491,16 @@ const EnhancedChatbotModalContent = ({ applicantId, onClose, candidateName, onOp
 };
 
 
-// --- NEW COMPONENT: Email Draft Modal (เหมือนเดิม) ---
 interface EmailDraftModalProps {
     draft: string;
     type: 'Offer' | 'Rejection';
     onClose: () => void;
     candidateName: string;
+    candidateEmail: string; // ✅ เพิ่มบรรทัดนี้
     newStatus: string;
 }
 
-const EmailDraftModal = ({ draft, type, onClose, candidateName, newStatus }: EmailDraftModalProps) => {
+const EmailDraftModal = ({ draft, type, onClose, candidateName, candidateEmail, newStatus }: EmailDraftModalProps) => {
     // ... (โค้ด EmailDraftModal ทั้งหมดของคุณ) ...
     const copyToClipboard = () => {
         navigator.clipboard.writeText(draft);
@@ -537,7 +542,7 @@ const EmailDraftModal = ({ draft, type, onClose, candidateName, newStatus }: Ema
                         Copy Draft & Close
                     </button>
                     <a 
-                        href={`mailto:?subject=${encodeURIComponent(isOffer ? `Job Offer - ${candidateName}` : `Application Update`)}&body=${encodeURIComponent(draft.replace(/\*\*/g, '').replace(/<br>/g, '\n'))}`}
+                        href={`mailto:${candidateEmail}?subject=${encodeURIComponent(isOffer ? `Job Offer - ${candidateName}` : `Application Update`)}&body=${encodeURIComponent(draft.replace(/\*\*/g, '').replace(/<br>/g, '\n'))}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="flex-1 px-4 py-3 text-center bg-gray-200 text-gray-800 rounded-xl font-semibold hover:bg-gray-300 transition shadow-md"
@@ -613,11 +618,24 @@ const CVSummaryContent = () => {
     if (!applicantId) { setError("Error: Applicant ID is missing in the URL."); setLoading(false); return; }
     const fetchApplicantData = async () => {
       setLoading(true);
-      const { data, error: fetchError } = await supabase.from('applicants').select('*').eq('id', applicantId).single();
+      const { data, error: fetchError } = await supabase
+        .from('applicants')
+        .select(`
+            *, 
+            job_descriptions ( title ) 
+        `) // <-- (แก้ไข) ดึง title จาก job_descriptions ที่ผูกกันอยู่
+        .eq('id', applicantId)
+        .single();
       if (fetchError || !data) { setError(fetchError?.message || `Applicant with ID ${applicantId} not found.`); setLoading(false); return; }
 
       const mappedData: CandidateReport = {
-        id: data.id, name: `${data.firstName} ${data.lastName}`, firstName: data.firstName, lastName: data.lastName, experience: data.experience || "N/A", position: data.position || "N/A", education: data.education || "N/A", matching_score: data.matching_score || 0, status: data.status || "Applied", ai_summary: data.ai_summary || "No AI Summary available. Run AI Matching first.", overview: data.overview || "No detailed job fit overview available. Needs a full 1:1 match run.",
+        id: data.id, name: `${data.firstName} ${data.lastName}`, firstName: data.firstName, lastName: data.lastName, 
+        email: data.email || "N/A", // ✅ เพิ่มบรรทัดนี้
+        phone: data.phone || "N/A", // ✅ เพิ่มบรรทัดนี้
+       experience: data.experience || "N/A", 
+        // (แก้ไขบรรทัด position)
+        position: (data.job_descriptions as any)?.title || data.position || "N/A", 
+        education: data.education || "N/A", matching_score: data.matching_score || 0, status: data.status || "Applied", ai_summary: data.ai_summary || "No AI Summary available. Run AI Matching first.", overview: data.overview || "No detailed job fit overview available. Needs a full 1:1 match run.",
         strengths: Array.isArray(data.strengths) ? data.strengths : [], potential_gaps: Array.isArray(data.potential_gaps) ? data.potential_gaps : [], cv_url: data.cv_url, emp_id: data.emp_id,
         potential_prediction: data.potential_prediction || "No prediction data available.",
         personality_inference: data.personality_inference || "No inference data available.",
@@ -678,14 +696,120 @@ const CVSummaryContent = () => {
     }
   };
 
-  const exportToExcel = () => { 
+const exportToDocx = () => {
       if (!candidateData) return;
-      const csvContent = [
-        ["Field", "Value"], ["Candidate Name", candidateData.name], ["Applicant ID", candidateData.id], ["Position", candidateData.position], ["Experience", candidateData.experience], ["Education", candidateData.education], ["Matching Score", candidateData.matching_score + "%"], ["Status", candidateData.status], ["AI Summary", candidateData.ai_summary], ["Strengths", candidateData.strengths.join("; ")], ["Overview", candidateData.overview], ["Potential Gaps", candidateData.potential_gaps.join("; ")],
-      ].map(r => r.join(",")).join("\n");
 
-      const blob = new Blob(['\uFEFF'+csvContent], { type: 'text/csv;charset=utf-8;' });
-      const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = `HR_Report_${candidateData.name.replace(/\s/g,'_')}.csv`; link.click();
+      // Helper function สำหรับสร้าง Paragraph (Key: Value)
+      const createDataParagraph = (label: string, value: string | number) => {
+          return new Paragraph({
+              children: [
+                  new TextRun({
+                      text: `${label}: `,
+                      bold: true,
+                      size: 24 // 12pt
+                  }),
+                  new TextRun({
+                      text: String(value),
+                      size: 24
+                  }),
+              ],
+              spacing: { after: 120 } // ระยะห่างหลัง Paragraph
+          });
+      };
+      
+      // Helper function สำหรับสร้าง Bullet points
+      const createBulletList = (items: string[]) => {
+          return items.map(item => 
+              new Paragraph({
+                  children: [
+                      new TextRun({ text: item, size: 24 })
+                  ],
+                  bullet: {
+                      level: 0
+                  },
+                  spacing: { after: 80 }
+              })
+          );
+      };
+
+      const doc = new Document({
+          sections: [{
+              properties: {},
+              children: [
+                  new Paragraph({
+                      children: [
+                          new TextRun({
+                              text: "AI HR MATCHING REPORT",
+                              bold: true,
+                              size: 40, // 20pt
+                              color: "384295", // สี Indigo
+                          }),
+                      ],
+                      heading: HeadingLevel.TITLE,
+                      alignment: AlignmentType.CENTER,
+                      spacing: { after: 300 }
+                  }),
+                  
+                  // --- ข้อมูลผู้สมัคร ---
+                 // --- ข้อมูลผู้สมัคร ---
+                  createDataParagraph("Candidate Name", candidateData.name),
+                  createDataParagraph("Email", candidateData.email), // ✅ เพิ่มบรรทัดนี้
+                  createDataParagraph("Phone", candidateData.phone), // ✅ เพิ่มบรรทัดนี้
+                  createDataParagraph("Applicant ID", candidateData.id),
+                  createDataParagraph("Position", candidateData.position),
+                  createDataParagraph("Matching Score", `${candidateData.matching_score}%`),
+                  createDataParagraph("PSS (Potential)", `${calculatePSS}%`), 
+                  createDataParagraph("Status", candidateData.status),
+                  
+                  // --- AI Summary ---
+                  new Paragraph({
+                      children: [ new TextRun({ text: "AI Summary", bold: true, size: 32, color: "14ADD6" }) ], // 16pt
+                      heading: HeadingLevel.HEADING_2,
+                      spacing: { before: 300, after: 150 }
+                  }),
+                  new Paragraph({
+                      children: [ new TextRun({ text: candidateData.ai_summary, size: 24, italics: true }) ],
+                      spacing: { after: 300 }
+                  }),
+
+                  // --- Strengths ---
+                  new Paragraph({
+                      children: [ new TextRun({ text: "Strengths (from AI)", bold: true, size: 32, color: "14ADD6" }) ],
+                      heading: HeadingLevel.HEADING_2,
+                      spacing: { before: 300, after: 150 }
+                  }),
+                  ...createBulletList(candidateData.strengths.length > 0 ? candidateData.strengths : ["N/A"]),
+                  
+                  // --- Potential Gaps ---
+                  new Paragraph({
+                      children: [ new TextRun({ text: "Potential Gaps (from AI)", bold: true, size: 32, color: "14ADD6" }) ],
+                      heading: HeadingLevel.HEADING_2,
+                      spacing: { before: 300, after: 150 }
+                  }),
+                  ...createBulletList(candidateData.potential_gaps.length > 0 ? candidateData.potential_gaps : ["N/A"]),
+
+                  // --- Overview ---
+                  new Paragraph({
+                      children: [ new TextRun({ text: "Job Fit Overview", bold: true, size: 32, color: "14ADD6" }) ],
+                      heading: HeadingLevel.HEADING_2,
+                      spacing: { before: 300, after: 150 }
+                  }),
+                  new Paragraph({
+                      children: [ new TextRun({ text: candidateData.overview, size: 24 }) ],
+                  }),
+              ],
+          }],
+      });
+
+      // ใช้ Packer เพื่อสร้าง Blob
+      Packer.toBlob(doc).then(blob => {
+          console.log("Document Blob created:", blob);
+          // ใช้ file-saver เพื่อดาวน์โหลด
+          saveAs(blob, `HR_Report_${candidateData.name.replace(/\s/g,'_')}.docx`);
+      }).catch(err => {
+          console.error("Error generating DOCX:", err);
+          alert("Failed to generate .docx report.");
+      });
   };
 
   const printToPDF = () => {
@@ -814,11 +938,14 @@ const CVSummaryContent = () => {
                         )}
                     </div>
                     
-                    {/* Export Full Report (Secondary Action) */}
-                    <button onClick={exportToExcel} className="px-3 py-2.5 bg-gray-100 text-gray-700 rounded-xl shadow-sm hover:bg-gray-200 transition font-medium text-sm flex items-center gap-2">
-                        <Download size={16} className={`text-[#14ADD6]`} /> Export
+                   {/* Export Full Report (Secondary Action) */}
+                    <button 
+                        onClick={exportToDocx} 
+                        className="px-3 py-2.5 bg-gray-100 text-gray-700 rounded-xl shadow-sm hover:bg-gray-200 transition font-medium text-sm flex items-center gap-2"
+                    >
+                        <Download size={16} className={`text-[#14ADD6]`} /> Export .docx
                     </button>
-                    
+
                     {/* Share via Email */}
                     <button onClick={shareToEmail} className="px-3 py-2.5 bg-gray-100 text-gray-700 rounded-xl shadow-sm hover:bg-gray-200 transition font-medium text-sm flex items-center gap-2">
                         <Mail size={16} className={`text-[#384295]`} /> Share
@@ -841,13 +968,27 @@ const CVSummaryContent = () => {
                   {/* Col 1 & 2 & 4: Profile, Summary (80%) */}
                   <div className="col-span-4 space-y-3"> 
                       {/* ... (JSX Profile Summary) ... */}
-                       <div className="flex items-center gap-4">
-                           <div className={`w-16 h-16 rounded-full bg-white flex items-center justify-center text-[${PRIMARY_COLOR_DARK}] font-bold text-xl border-4 border-[#14ADD6]/50 shadow-lg`}>
+                      <div className="flex items-center gap-4">
+                           <div className={`w-16 h-16 rounded-full bg-white flex items-center justify-center text-[${PRIMARY_COLOR_DARK}] font-bold text-xl border-4 border-[#14ADD6]/50 shadow-lg flex-shrink-0`}>
                               {candidateData.firstName[0]}{candidateData.lastName[0]}
                           </div>
                           <div>
                               <h3 className="text-2xl font-extrabold text-gray-900">{candidateData.name}</h3>
                               <p className={`text-base text-[${PRIMARY_COLOR_DARK}] font-semibold`}>{candidateData.position}</p>
+                              
+                              {/* ✅ ส่วนที่เพิ่มเข้ามาใหม่ */}
+                              <div className="flex flex-col sm:flex-row sm:items-center sm:gap-4 mt-2 text-sm text-gray-600">
+                                  <span className="flex items-center gap-1.5">
+                                      <Mail size={14} className="text-gray-500 flex-shrink-0" />
+                                      {candidateData.email}
+                                  </span>
+                                  <span className="flex items-center gap-1.5 mt-1 sm:mt-0">
+                                      <Phone size={14} className="text-gray-500 flex-shrink-0" /> 
+                                      {candidateData.phone}
+                                  </span>
+                              </div>
+                              {/* ✅ จบส่วนที่เพิ่ม */}
+                              
                           </div>
                       </div>
                       
@@ -1158,18 +1299,17 @@ const CVSummaryContent = () => {
             </div>
         )}
 
-        {/* Email Draft Modal */}
+       {/* Email Draft Modal */}
         {showEmailModal && emailDraftData && candidateData && (
             <EmailDraftModal 
                 draft={emailDraftData.draft}
                 type={emailDraftData.type}
                 candidateName={candidateData.name}
+                candidateEmail={candidateData.email} // ✅ เพิ่มบรรทัดนี้
                 newStatus={emailDraftData.newStatus}
                 onClose={() => setShowEmailModal(false)}
             />
         )}
-
-
       </div>
     </div>
   );

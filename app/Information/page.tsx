@@ -1,21 +1,39 @@
 "use client";
 import React, { useState, useEffect } from 'react';
 import { supabase } from "../../lib/supabaseClient"; 
-import { Upload, Eye, Edit2, Trash2, X, Download, FileText, Plus, Search, ChevronLeft, ChevronRight, ArrowUpDown, Filter } from 'lucide-react';
+// (เพิ่ม Icon สำหรับ Phone/Email)
+import { Upload, Eye, Edit2, Trash2, X, Download, FileText, Plus, Search, ChevronLeft, ChevronRight, ArrowUpDown, Filter, Mail, Phone } from 'lucide-react';
 
 export default function CVManagementSystem() {
+
+// --- [1. MODIFY INTERFACE] ---
 interface Applicant {
   id: string;
   firstName: string;
   lastName: string;
   gender: string;
   experience: number;
-  position: string;
+  job_id: string | null; 
   status: string;
   cv_url?: string | null;
+  job_descriptions?: { 
+    id: string;
+    title: string;
+  } | null;
+  // (ADDED) เพิ่ม Fields ใหม่
+  email?: string | null;
+  phone?: string | null;
+}
+// --- [END MODIFY] ---
+
+// Interface สำหรับ state ของ Job List
+interface Job {
+  id: string;
+  title: string;
 }
 
 const [applicants, setApplicants] = useState<Applicant[]>([]);    
+const [jobsList, setJobsList] = useState<Job[]>([]); 
 
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
@@ -25,25 +43,38 @@ const [applicants, setApplicants] = useState<Applicant[]>([]);
   const [confirmAction, setConfirmAction] = useState<{ message: string, onConfirm: () => void } | null>(null);
   const [selectedApplicant, setSelectedApplicant] = useState<Applicant | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  
+  // --- [2. MODIFY STATE TYPE] ---
   const [editForm, setEditForm] = useState<{
     id?: string;
     firstName?: string;
     lastName?: string;
+    // (ADDED)
+    email?: string | null;
+    phone?: string | null;
     gender?: string;
     experience?: number;
-    position?: string;
+    job_id?: string | null; 
     status?: string;
     cv_url?: string | null;
-
+    job_descriptions?: { 
+        id: string;
+        title: string;
+    } | null;
   }>({});
+  
   const [newApplicantForm, setNewApplicantForm] = useState({
     firstName: '',
     lastName: '',
+    // (ADDED)
+    email: '',
+    phone: '',
     gender: 'Male',
     experience: 0,
-    position: '',
+    job_id: '', 
     status: 'Applied'
   });
+  // --- [END MODIFY] ---
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -57,7 +88,26 @@ const [applicants, setApplicants] = useState<Applicant[]>([]);
   const [statusFilter, setStatusFilter] = useState('All');
   const [genderFilter, setGenderFilter] = useState('All');
 
-  const handleSort = (field) => {
+  // (FIX 1: ย้าย fetchApplicants ขึ้นมา)
+  const fetchApplicants = async () => {
+    // (ใช้ select * ถูกต้องแล้ว เพราะมันจะดึง email, phone มาอัตโนมัติ)
+    const { data, error } = await supabase
+      .from('applicants')
+      .select(`
+        *, 
+        job_descriptions ( id, title ) 
+      `) 
+      .order('id', { ascending: true });
+      
+    if (error) {
+       console.error("Error fetching applicants:", error);
+    } else {
+       setApplicants(data as Applicant[]); 
+    }
+  };
+
+
+  const handleSort = (field: string) => { 
     if (sortField === field) {
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
     } else {
@@ -66,7 +116,7 @@ const [applicants, setApplicants] = useState<Applicant[]>([]);
     }
   };
 
-  const showConfirm = (action, message, onConfirm) => {
+  const showConfirm = (action: string, message: string, onConfirm: () => void) => { 
     setConfirmAction({ message, onConfirm });
     setShowConfirmModal(true);
   };
@@ -79,8 +129,7 @@ const [applicants, setApplicants] = useState<Applicant[]>([]);
     setConfirmAction(null);
   };
 
-// --- [!!! นี่คือจุดแก้ไข !!!] ---
-// (แก้ไข `handleFileUpload` ให้ตรงตามเป้าหมายของคุณ)
+// (ส่วนนี้เหมือนเดิม)
 const handleFileUpload = async (applicantId: string, file: File) => {
   if (!file) return alert('No file selected');
   if (file.type !== 'application/pdf') return alert('Please upload a PDF file only');
@@ -88,35 +137,29 @@ const handleFileUpload = async (applicantId: string, file: File) => {
   try {
     const filePath = `${applicantId}/${file.name}`;
 
-    // Upload to Supabase Storage
     const { error: uploadError } = await supabase
       .storage
       .from('cv_bucket')
       .upload(filePath, file, { upsert: true });
     if (uploadError) throw uploadError;
 
-    // Get public URL
     const { data } = supabase
       .storage
       .from('cv_bucket')
       .getPublicUrl(filePath);
     const publicURL = data.publicUrl;
     
-    // --- 1. [เป้าหมายที่ 1] อัปเดต 'applicants' ด้วย cv_url ---
     await supabase
       .from('applicants')
       .update({ cv_url: publicURL })
       .eq('id', applicantId);
 
-    // (Show preview immediately - Optional)
     const updatedApplicant = applicants.find(a => a.id === applicantId);
     if (updatedApplicant) {
       setSelectedApplicant({ ...updatedApplicant, cv_url: publicURL });
       setShowPreviewModal(true);
     }
-
    
-    // --- 2. [เป้าหมายที่ 2] เรียก API เพื่อเอา Text ---
     const response = await fetch('/api/extractCV', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -129,22 +172,20 @@ const handleFileUpload = async (applicantId: string, file: File) => {
     }
 
     if (!result.error) {
-      // --- 3. [เป้าหมายที่ 3] บันทึก Text ลงตาราง 'cvs' ---
       await supabase
         .from('cvs')
-        .insert([{
+        .upsert([{
           filename: file.name,
-          text: result.text || '',        // ข้อความที่ extract จาก CV
+          text: result.text || '',
           upload_by: applicantId,
           created_at: new Date().toISOString()
-        }]);
+        }], { 
+            onConflict: 'upload_by'
+        });
 
-      // --- 4. [ลบออก] ---
-      // (เราจะไม่ update 'applicants' ด้วย firstName, lastName จาก Gemini ที่นี่)
-
-      fetchApplicants();  // รีเฟรชตาราง
+      fetchApplicants(); 
       setShowUploadModal(false);
-      alert('CV uploaded and text saved successfully!'); // เปลี่ยนข้อความ
+      alert('CV uploaded and text saved successfully!');
     }
 
   } catch (err: any) {
@@ -152,29 +193,34 @@ const handleFileUpload = async (applicantId: string, file: File) => {
     alert(`Upload failed: ${err.message}`);
   }
 };
-// --- [!!! สิ้นสุดการแก้ไข !!!] ---
 
 
-
+// --- [DATA FETCHING] ---
 useEffect(() => {
   fetchApplicants();
 }, []);
 
-const fetchApplicants = async () => {
-  const { data, error } = await supabase
-    .from('applicants')
-    .select('*')
-    .order('id', { ascending: true });
-  if (error) return console.error(error);
-  setApplicants(data);
-};
+useEffect(() => {
+  const fetchJobsList = async () => {
+      const { data, error } = await supabase
+        .from('job_descriptions')
+        .select('id, title'); 
+        
+      if (error) {
+          console.error("Error fetching jobs list:", error);
+      } else {
+          setJobsList(data as Job[]);
+      }
+  };
+  fetchJobsList();
+}, []); 
+// --- [สิ้นสุดการแก้ไข Data Fetching] ---
 
 
-
-  const handleDelete = async (id) => {
+  const handleDelete = async (id: string) => { 
   const { error } = await supabase
     .from('applicants')
-    .delete() // REPLACE HERE
+    .delete() 
     .eq('id', id);
   if (error) return alert(error.message);
 
@@ -188,8 +234,14 @@ const fetchApplicants = async () => {
     'Are you sure you want to delete this CV?',
     async () => {
       if (applicant.cv_url) {
-        const fileName = applicant.cv_url.split('/').pop(); // extract filename
-        await supabase.storage.from('cv_bucket').remove([`${applicant.id}/${fileName}`]);
+        const urlParts = applicant.cv_url.split('/');
+        const filePath = `${urlParts[urlParts.length - 2]}/${urlParts[urlParts.length - 1]}`;
+        
+        if (filePath && filePath.includes(applicant.id)) {
+            await supabase.storage.from('cv_bucket').remove([filePath]);
+        } else {
+            console.warn("Could not determine file path from URL to delete from storage:", applicant.cv_url);
+        }
       }
       await supabase.from('applicants').update({ cv_url: null }).eq('id', applicant.id);
       await supabase.from('cvs').delete().eq('upload_by', applicant.id);
@@ -200,46 +252,65 @@ const fetchApplicants = async () => {
 };
 
 
-  const openPreview = (applicant) => {
+  const openPreview = (applicant: Applicant) => { 
     setSelectedApplicant(applicant);
     setShowPreviewModal(true);
   };
 
-  const openEdit = (applicant) => {
+  const openEdit = (applicant: Applicant) => { 
     setSelectedApplicant(applicant);
-    setEditForm({ ...applicant });
+    // (setEditForm({...applicant}) จะดึง email/phone ที่ fetch มาอัตโนมัติ)
+    setEditForm({ 
+        ...applicant,
+        job_id: applicant.job_id || null 
+    });
     setShowEditModal(true);
   };
 
   const handleEditSave = async () => {
+  const { id, job_descriptions, ...updateData } = editForm;
+
   const { data, error } = await supabase
     .from('applicants')
-    .update({ ...editForm }) // REPLACE HERE
-    .eq('id', editForm.id);
+    .update(updateData) // (updateData มี email/phone แล้ว)
+    .eq('id', editForm.id); 
   if (error) return alert(error.message);
 
   setShowEditModal(false);
-  fetchApplicants();
+  fetchApplicants(); 
 };
 
 
   const handleAddApplicant = async () => {
-  if (!newApplicantForm.firstName || !newApplicantForm.lastName || !newApplicantForm.position) {
-    alert('Please fill in all required fields');
+  // (เพิ่ม validation)
+  if (!newApplicantForm.firstName || !newApplicantForm.lastName || !newApplicantForm.job_id || !newApplicantForm.email) {
+    alert('Please fill in all required fields (First Name, Last Name, Email, Position)');
     return;
   }
 
   const { data, error } = await supabase
     .from('applicants')
-    .insert([{ ...newApplicantForm }]); // REPLACE HERE
+    .insert([{ ...newApplicantForm }]); // (newApplicantForm มี email/phone แล้ว)
   if (error) return alert(error.message);
 
+  // --- [3. MODIFY RESET FORM] ---
+  setNewApplicantForm({
+      firstName: '',
+      lastName: '',
+      email: '', // (ADDED)
+      phone: '', // (ADDED)
+      gender: 'Male',
+      experience: 0,
+      job_id: '',
+      status: 'Applied'
+  });
+  // --- [END MODIFY] ---
   setShowAddModal(false);
-  fetchApplicants();
+  fetchApplicants(); 
 };
 
 
-  const handleExportCV = (applicant) => {
+  const handleExportCV = (applicant: Applicant) => { 
     if (!applicant.cv_url) {
       alert('No CV available to export');
       return;
@@ -252,9 +323,14 @@ const fetchApplicants = async () => {
 
   // Filter and sort applicants
   let filteredApplicants = applicants.filter(app => {
+    // (เพิ่มการค้นหา email/phone)
     const matchesSearch = app.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       app.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      app.id.toLowerCase().includes(searchTerm.toLowerCase());
+      app.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (app.email || '').toLowerCase().includes(searchTerm.toLowerCase()) || // (ADDED)
+      (app.phone || '').toLowerCase().includes(searchTerm.toLowerCase()) || // (ADDED)
+      (app.job_descriptions?.title || '').toLowerCase().includes(searchTerm.toLowerCase());
+      
     const matchesStatus = statusFilter === 'All' || app.status === statusFilter;
     const matchesGender = genderFilter === 'All' || app.gender === genderFilter;
     return matchesSearch && matchesStatus && matchesGender;
@@ -262,8 +338,15 @@ const fetchApplicants = async () => {
 
   // Sort applicants
   filteredApplicants.sort((a, b) => {
-    let aVal = a[sortField];
-    let bVal = b[sortField];
+    let aVal, bVal;
+
+    if (sortField === 'job_descriptions') {
+        aVal = a.job_descriptions?.title || '';
+        bVal = b.job_descriptions?.title || '';
+    } else {
+        aVal = (a as any)[sortField];
+        bVal = (b as any)[sortField];
+    }
     
     if (typeof aVal === 'string') {
       aVal = aVal.toLowerCase();
@@ -293,16 +376,16 @@ const fetchApplicants = async () => {
             <p className="text-slate-600">Manage applicant CVs and information</p>
           </div>
          <button
-  onClick={() => setShowAddModal(true)}
-  className="bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white px-8 py-4 rounded-xl font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 flex items-center gap-2"
->
- 
-  New Applicant
-</button>
+            onClick={() => setShowAddModal(true)}
+            className="bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white px-8 py-4 rounded-xl font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 flex items-center gap-2"
+          >
+          <Plus className="w-5 h-5" />
+          New Applicant
+        </button>
 
         </div>
 
-        {/* Stats Cards */}
+        {/* Stats Cards (เหมือนเดิม) */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           <div className="bg-white rounded-xl shadow-sm p-6 border border-slate-200">
             <div className="flex items-center justify-between">
@@ -350,7 +433,8 @@ const fetchApplicants = async () => {
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-5 h-5" />
               <input
                 type="text" 
-                placeholder="Search by name or ID..."
+                // (เพิ่ม placeholder)
+                placeholder="Search by name, ID, Email, Phone, or Position..." 
                 className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none" 
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -406,18 +490,14 @@ const fetchApplicants = async () => {
                       Name <ArrowUpDown className="w-3 h-3" />
                     </button>
                   </th>
+                  {/* (เพิ่มคอลัมน์ Contact) */}
                   <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
-                    <button onClick={() => handleSort('gender')} className="flex items-center gap-1 hover:text-blue-600">
-                      Gender <ArrowUpDown className="w-3 h-3" />
+                    <button onClick={() => handleSort('email')} className="flex items-center gap-1 hover:text-blue-600">
+                      Contact <ArrowUpDown className="w-3 h-3" />
                     </button>
                   </th>
                   <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
-                    <button onClick={() => handleSort('experience')} className="flex items-center gap-1 hover:text-blue-600">
-                      Exp. <ArrowUpDown className="w-3 h-3" />
-                    </button>
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
-                    <button onClick={() => handleSort('position')} className="flex items-center gap-1 hover:text-blue-600">
+                    <button onClick={() => handleSort('job_descriptions')} className="flex items-center gap-1 hover:text-blue-600">
                       Position <ArrowUpDown className="w-3 h-3" />
                     </button>
                   </th>
@@ -434,11 +514,19 @@ const fetchApplicants = async () => {
                 {currentApplicants.map((app, idx) => (
                   <tr key={app.id} className="hover:bg-slate-50 transition-colors">
                     <td className="px-6 py-4 text-sm text-slate-700">{startIndex + idx + 1}</td>
-                    <td className="px-6 py-4 text-sm font-medium text-slate-900">{app.id}</td>
+                    <td className="px-6 py-4 text-sm font-medium text-slate-900 truncate" style={{ maxWidth: '100px' }}>{app.id}</td>
                     <td className="px-6 py-4 text-sm text-slate-700">{app.firstName} {app.lastName}</td>
-                    <td className="px-6 py-4 text-sm text-slate-700">{app.gender}</td>
-                    <td className="px-6 py-4 text-sm text-slate-700">{app.experience} yrs</td>
-                    <td className="px-6 py-4 text-sm text-slate-700">{app.position}</td>
+                    
+                    {/* (เพิ่มคอลัมน์ Contact) */}
+                    <td className="px-6 py-4 text-sm text-slate-700" style={{ minWidth: '180px' }}>
+                        {app.email && <div className="flex items-center gap-2"><Mail size={14} className="text-slate-400"/> {app.email}</div>}
+                        {app.phone && <div className="flex items-center gap-2 mt-1"><Phone size={14} className="text-slate-400"/> {app.phone}</div>}
+                    </td>
+                    
+                    <td className="px-6 py-4 text-sm text-slate-700">
+                      {app.job_descriptions?.title || (app.job_id ? <span className="text-red-500 text-xs">Job ID not found</span> : <span className="text-gray-400">N/A</span>)}
+                    </td>
+
                     <td className="px-6 py-4">
                       <span className={`px-3 py-1 rounded-full text-xs font-medium ${
                         app.status === 'Shortlisted' ? 'bg-blue-100 text-blue-700' :
@@ -450,20 +538,22 @@ const fetchApplicants = async () => {
                         {app.status}
                       </span>
                     </td>
+                    
+                    {/* (CV Column) */}
                     <td className="px-6 py-4">
                       {app.cv_url ? (
                         <div className="flex items-center gap-2">
-                          {showPreviewModal && selectedApplicant?.cv_url && (
-                        <iframe
-                            src={selectedApplicant.cv_url}
-                            className="w-full h-full rounded-lg border border-slate-200"
-                            title="CV Preview"
-                        />
-              )}  
-
+                          <button
+                            onClick={() => openPreview(app)}
+                            className={`p-1 rounded-lg transition-colors ${app.cv_url ? 'text-blue-600 hover:bg-blue-50' : 'text-slate-300 cursor-not-allowed'}`}
+                            title="Preview CV"
+                            disabled={!app.cv_url}
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
                           <button
                             onClick={() => handleDeleteCV(app)}
-                            className="text-red-500 hover:text-red-700"
+                            className="text-red-500 hover:text-red-700 p-1 rounded-lg hover:bg-red-50"
                             title="Delete CV"
                           >
                             <X className="w-4 h-4" />
@@ -482,27 +572,21 @@ const fetchApplicants = async () => {
                         </button>
                       )}
                     </td>
+                    
+                    {/* (Actions Column) */}
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
                         <button
-                          onClick={() => openPreview(app)}
-                          className={`p-2 rounded-lg transition-colors ${app.cv_url ? 'text-blue-600 hover:bg-blue-50' : 'text-slate-300 cursor-not-allowed'}`}
-                          title="Preview CV"
-                          disabled={!app.cv_url}
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
-                        <button
                           onClick={() => openEdit(app)}
                           className="p-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
-                          title="Edit"
+                          title="Edit Applicant"
                         >
                           <Edit2 className="w-4 h-4" />
                         </button>
                         <button
                           onClick={() => handleDelete(app.id)}
                           className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                          title="Delete"
+                          title="Delete Applicant"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -514,7 +598,7 @@ const fetchApplicants = async () => {
             </table>
           </div>
 
-          {/* Pagination */}
+          {/* Pagination (เหมือนเดิม) */}
           <div className="px-6 py-4 border-t border-slate-200 flex items-center justify-between">
             <div className="text-sm text-slate-600">
               Showing {startIndex + 1} to {Math.min(endIndex, filteredApplicants.length)} of {filteredApplicants.length} applicants
@@ -541,7 +625,7 @@ const fetchApplicants = async () => {
           </div>
         </div>
 
-        {/* Add Applicant Modal */}
+        {/* --- [4. MODIFY "ADD" MODAL] --- */}
         {showAddModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
             <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl">
@@ -551,7 +635,9 @@ const fetchApplicants = async () => {
                   <X className="w-6 h-6" />
                 </button>
               </div>
-              <div className="space-y-4">
+              {/* (ปรับ layout เป็น grid 2 คอลัมน์) */}
+              <div className="grid grid-cols-2 gap-4">
+                {/* (First Name - Span 1) */}
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">First Name *</label>
                   <input
@@ -561,6 +647,7 @@ const fetchApplicants = async () => {
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
                   />
                 </div>
+                {/* (Last Name - Span 1) */}
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Last Name *</label>
                   <input
@@ -570,6 +657,32 @@ const fetchApplicants = async () => {
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
                   />
                 </div>
+                
+                {/* (Email - Span 2) */}
+                <div className="col-span-2">
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Email *</label>
+                  <input
+                    type="email"
+                    value={newApplicantForm.email}
+                    onChange={(e) => setNewApplicantForm({...newApplicantForm, email: e.target.value})}
+                    placeholder="applicant@example.com"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                  />
+                </div>
+                
+                {/* (Phone - Span 2) */}
+                <div className="col-span-2">
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Phone</label>
+                  <input
+                    type="tel"
+                    value={newApplicantForm.phone}
+                    onChange={(e) => setNewApplicantForm({...newApplicantForm, phone: e.target.value})}
+                    placeholder="080-123-4567"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                  />
+                </div>
+
+                {/* (Gender - Span 1) */}
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Gender</label>
                   <div className="relative">
@@ -585,17 +698,10 @@ const fetchApplicants = async () => {
                     <ChevronRight className="absolute right-3 top-1/2 transform -translate-y-1/2 rotate-90 text-slate-400 w-4 h-4 pointer-events-none" />
                   </div>
                 </div>
+
+                {/* (Experience - Span 1) */}
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Position *</label>
-                  <input
-                    type="text"
-                    value={newApplicantForm.position}
-                    onChange={(e) => setNewApplicantForm({...newApplicantForm, position: e.target.value})}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Experience (years)</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Experience (yrs)</label>
                   <input
                     type="number"
                     value={newApplicantForm.experience}
@@ -603,7 +709,27 @@ const fetchApplicants = async () => {
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
                   />
                 </div>
-                <div>
+
+                {/* (Position - Span 2) */}
+                <div className="col-span-2">
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Position *</label>
+                  <div className="relative">
+                    <select
+                      value={newApplicantForm.job_id}
+                      onChange={(e) => setNewApplicantForm({...newApplicantForm, job_id: e.target.value})}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none appearance-none bg-white cursor-pointer"
+                    >
+                      <option value="">-- Select Position --</option>
+                      {jobsList.map(job => ( 
+                        <option key={job.id} value={job.id}>{job.title}</option>
+                      ))}
+                    </select>
+                    <ChevronRight className="absolute right-3 top-1/2 transform -translate-y-1/2 rotate-90 text-slate-400 w-4 h-4 pointer-events-none" />
+                  </div>
+                </div>
+                
+                {/* (Status - Span 2) */}
+                <div className="col-span-2">
                   <label className="block text-sm font-medium text-slate-700 mb-1">Status</label>
                   <div className="relative">
                     <select
@@ -638,8 +764,10 @@ const fetchApplicants = async () => {
             </div>
           </div>
         )}
+        {/* --- [END MODIFY] --- */}
 
-        {/* Confirm Modal */}
+
+        {/* Confirm Modal (เหมือนเดิม) */}
         {showConfirmModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
             <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl">
@@ -663,7 +791,7 @@ const fetchApplicants = async () => {
           </div>
         )}
 
-        {/* Upload Modal */}
+        {/* Upload Modal (เหมือนเดิม) */}
         {showUploadModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
             <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl">
@@ -685,28 +813,27 @@ const fetchApplicants = async () => {
                 <Upload className="w-12 h-12 text-slate-400 mx-auto mb-4" />
                 <p className="text-sm text-slate-600 mb-2">Drop your PDF here or click to browse</p>
                 <input
-  type="file"
-  accept=".pdf"
-  id={`cv-upload-${selectedApplicant?.id}`}
-  onChange={(e) => {
-    if (!e.target.files || !selectedApplicant) return;
-    handleFileUpload(selectedApplicant.id, e.target.files[0]);
-  }}
-  className="hidden"
-/>
-<label
-  htmlFor={`cv-upload-${selectedApplicant?.id}`}
-  className="inline-block px-4 py-2 bg-blue-500 text-white rounded-lg cursor-pointer hover:bg-blue-600 transition-colors text-sm"
->
-  Choose File
-</label>
-
+                  type="file"
+                  accept=".pdf"
+                  id={`cv-upload-${selectedApplicant?.id}`}
+                  onChange={(e) => {
+                    if (!e.target.files || !selectedApplicant) return;
+                    handleFileUpload(selectedApplicant.id, e.target.files[0]);
+                  }}
+                  className="hidden"
+                />
+                <label
+                  htmlFor={`cv-upload-${selectedApplicant?.id}`}
+                  className="inline-block px-4 py-2 bg-blue-500 text-white rounded-lg cursor-pointer hover:bg-blue-600 transition-colors text-sm"
+                >
+                  Choose File
+                </label>
               </div>
             </div>
           </div>
         )}
 
-        {/* Preview Modal */}
+        {/* Preview Modal (เหมือนเดิม) */}
         {showPreviewModal && selectedApplicant?.cv_url && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
             <div className="bg-white rounded-2xl max-w-4xl w-full h-[90vh] flex flex-col shadow-2xl">
@@ -733,7 +860,7 @@ const fetchApplicants = async () => {
           </div>
         )}
 
-        {/* Edit Modal */}
+        {/* --- [5. MODIFY "EDIT" MODAL] --- */}
         {showEditModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
             <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl">
@@ -746,30 +873,56 @@ const fetchApplicants = async () => {
                   <X className="w-6 h-6" />
                 </button>
               </div>
-              <div className="space-y-4">
+              {/* (ปรับ layout เป็น grid 2 คอลัมน์) */}
+              <div className="grid grid-cols-2 gap-4">
+                {/* (First Name - Span 1) */}
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">First Name</label>
                   <input
                     type="text"
-                    value={editForm.firstName}
+                    value={editForm.firstName || ''} 
                     onChange={(e) => setEditForm({...editForm, firstName: e.target.value})}
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
                   />
                 </div>
+                {/* (Last Name - Span 1) */}
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Last Name</label>
                   <input
                     type="text"
-                    value={editForm.lastName}
+                    value={editForm.lastName || ''} 
                     onChange={(e) => setEditForm({...editForm, lastName: e.target.value})}
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
                   />
                 </div>
+
+                {/* (Email - Span 2) */}
+                <div className="col-span-2">
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
+                  <input
+                    type="email"
+                    value={editForm.email || ''} 
+                    onChange={(e) => setEditForm({...editForm, email: e.target.value})}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                  />
+                </div>
+                {/* (Phone - Span 2) */}
+                <div className="col-span-2">
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Phone</label>
+                  <input
+                    type="tel"
+                    value={editForm.phone || ''} 
+                    onChange={(e) => setEditForm({...editForm, phone: e.target.value})}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                  />
+                </div>
+
+                {/* (Gender - Span 1) */}
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Gender</label>
                   <div className="relative">
                     <select
-                      value={editForm.gender}
+                      value={editForm.gender || 'Male'} 
                       onChange={(e) => setEditForm({...editForm, gender: e.target.value})}
                       className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none appearance-none bg-white cursor-pointer"
                     >
@@ -780,29 +933,42 @@ const fetchApplicants = async () => {
                     <ChevronRight className="absolute right-3 top-1/2 transform -translate-y-1/2 rotate-90 text-slate-400 w-4 h-4 pointer-events-none" />
                   </div>
                 </div>
+
+                {/* (Experience - Span 1) */}
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Position</label>
-                  <input
-                    type="text"
-                    value={editForm.position}
-                    onChange={(e) => setEditForm({...editForm, position: e.target.value})}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Experience (years)</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Experience (yrs)</label>
                   <input
                     type="number"
-                    value={editForm.experience}
+                    value={editForm.experience || 0} 
                     onChange={(e) => setEditForm({...editForm, experience: parseInt(e.target.value) || 0})}
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
                   />
                 </div>
-                <div>
+
+                {/* (Position - Span 2) */}
+                <div className="col-span-2">
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Position</label>
+                  <div className="relative">
+                    <select
+                      value={editForm.job_id || ''} 
+                      onChange={(e) => setEditForm({...editForm, job_id: e.target.value || null})} 
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none appearance-none bg-white cursor-pointer"
+                    >
+                      <option value="">-- Select Position --</option>
+                      {jobsList.map(job => ( 
+                        <option key={job.id} value={job.id}>{job.title}</option>
+                      ))}
+                    </select>
+                    <ChevronRight className="absolute right-3 top-1/2 transform -translate-y-1/2 rotate-90 text-slate-400 w-4 h-4 pointer-events-none" />
+                  </div>
+                </div>
+                
+                {/* (Status - Span 2) */}
+                <div className="col-span-2">
                   <label className="block text-sm font-medium text-slate-700 mb-1">Status</label>
                   <div className="relative">
                     <select
-                      value={editForm.status}
+                      value={editForm.status || 'Applied'} 
                       onChange={(e) => setEditForm({...editForm, status: e.target.value})}
                       className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none appearance-none bg-white cursor-pointer"
                     >
@@ -833,6 +999,8 @@ const fetchApplicants = async () => {
             </div>
           </div>
         )}
+        {/* --- [END MODIFY] --- */}
+
       </div>
     </div>
   );
