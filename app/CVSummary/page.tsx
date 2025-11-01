@@ -58,7 +58,7 @@ const LOCALE = {
         },
         TOOL_SHORTCUTS: {
             CV: "View Full CV",
-            REPORT: "View AI Report",
+             REPORT: "Generate Interview Questions",
             INFERENCE: "Personality Inference",
             PREDICTION: "Potential Prediction",
         },
@@ -296,7 +296,16 @@ const EnhancedChatbotModalContent = ({ applicantId, onClose, candidateName, onOp
 
   const toolShortcuts = useMemo(() => [
       { icon: Eye, label: T.TOOL_SHORTCUTS.CV, action: onOpenCV, color: "bg-gray-100 hover:bg-gray-200 text-gray-700" },
-      { icon: FileText, label: T.TOOL_SHORTCUTS.REPORT, action: onOpenReport, color: `bg-[#14ADD6]/10 hover:bg-[#14ADD6]/20 text-[#14ADD6]` },
+{
+  icon: FileText,
+  label: "Generate Interview Questions",
+  action: () =>
+    handleQuickAction(
+      "Based on this candidate’s CV, generate 5 structured and insightful interview questions that HR can ask to evaluate their skills, experience, and motivation for this role."
+    ),
+  color: `bg-[#14ADD6]/10 hover:bg-[#14ADD6]/20 text-[#14ADD6]`,
+},
+
       { icon: Users, label: T.TOOL_SHORTCUTS.INFERENCE, action: () => handleAnalysisTool('inference'), color: `bg-[#384295]/10 hover:bg-[#384295]/20 text-[#384295]` },
       { icon: Cpu, label: T.TOOL_SHORTCUTS.PREDICTION, action: () => handleAnalysisTool('prediction'), color: "bg-gray-100 hover:bg-gray-200 text-gray-700" },
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1315,11 +1324,6 @@ const exportToDocx = () => {
   );
 }
 
-
-// ===================================================================
-// ===== 2. COMPONENT แม่ (PAGE หลักที่ EXPORT) =====
-// (นี่คือ 'CVSummaryApp' เดิมของคุณที่ถูกแก้ไข)
-// ===================================================================
 export default function CVSummaryPage() {
   
   // ❌ ห้ามมี Logic หรือ Hooks (useSearchParams) ที่นี่
