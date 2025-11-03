@@ -31,7 +31,7 @@ export default function Navbar() {
   };
 
   const loginButtonStyle: React.CSSProperties = {
-    background: 'linear-gradient(90deg, #14ADD6, #384295)',
+    background: 'linear-gradient(90deg, #06b6d4, #4f46e5)', 
     color: 'white',
     padding: '8px 16px',
     borderRadius: '8px',
@@ -110,13 +110,13 @@ export default function Navbar() {
         ))}
       </div>
      
-      {/* 3. คอลัมน์ขวา (ข้อมูลผู้ใช้) */}
+
       <div style={{ 
-        flex: 1, // <-- เพิ่ม
+        flex: 1, 
         display: 'flex', 
         alignItems: 'center', 
         gap: '24px', 
-        justifyContent: 'flex-end' // <-- เพิ่ม เพื่อดันทุกอย่างไปชิดขวา
+        justifyContent: 'flex-end' 
       }}>
         
         {status === "loading" ? (
@@ -135,7 +135,7 @@ export default function Navbar() {
             <div style={{ 
               display: 'flex', 
               flexDirection: 'column', 
-              alignItems: 'flex-start' // <-- เปลี่ยนจาก 'flex-end' เป็น 'flex-start'
+              alignItems: 'flex-start'
             }}>
               <span style={{ fontSize: 14, color: '#121212' }}>
                 {session.user?.name} 
