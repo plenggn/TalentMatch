@@ -1,263 +1,76 @@
 "use client";
+
 import React from 'react';
 import Link from 'next/link';
 import { signIn } from 'next-auth/react';
+import Image from 'next/image';
+
+const GoogleIcon = () => (
+  <svg className="w-5 h-5" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+    <path fill="#FFC107" d="M43.611,20.083H42V20H24v8h11.303c-1.649,4.657-6.08,8-11.303,8c-6.627,0-12-5.373-12-12c0-6.627,5.373-12,12-12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C12.955,4,4,12.955,4,24c0,11.045,8.955,20,20,20c11.045,0,20-8.955,20-20C44,22.659,43.862,21.35,43.611,20.083z"></path>
+    <path fill="#FF3D00" d="M6.306,14.691l6.571,4.819C14.655,15.108,18.961,12,24,12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C16.318,4,9.656,8.337,6.306,14.691z"></path>
+    <path fill="#4CAF50" d="M24,44c5.166,0,9.86-1.977,13.409-5.192l-6.19-5.238C29.211,35.091,26.715,36,24,36c-5.222,0-9.619-3.317-11.283-7.946l-6.522,5.025C9.505,39.556,16.227,44,24,44z"></path>
+    <path fill="#1976D2" d="M43.611,20.083H42V20H24v8h11.303c-0.792,2.237-2.231,4.166-4.087,5.571l6.19,5.238C39.999,36.505,44,30.825,44,24C44,22.659,43.862,21.35,43.611,20.083z"></path>
+  </svg>
+);
 
 export default function LoginPage() {
 
-  // Style สำหรับปุ่ม Social (Google, Facebook)
-  const socialButtonStyle: React.CSSProperties = {
-    flex: 1, 
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: '0.5rem', 
-    padding: '0.75rem',
-    backgroundColor: 'white',
-    border: '1px solid #e0e0e0', 
-    borderRadius: '8px',
-    cursor: 'pointer',
-    fontSize: '14px',
-    fontWeight: 600,
-    color: '#262626',
-    transition: 'background-color 0.2s ease',
-  };
-
-  // Style สำหรับ Input Fields
-  const inputStyle: React.CSSProperties = {
-    width: '100%',
-    padding: '0.75rem',
-    boxSizing: 'border-box',
-    border: '1px solid #e0e0e0',
-    borderRadius: '8px',
-    backgroundColor: '#f9f9f9', 
-    fontSize: '14px',
-  };
-
-  // Style สำหรับ Label
-  const labelStyle: React.CSSProperties = {
-    display: 'block',
-    marginBottom: '0.5rem',
-    fontSize: '14px',
-    fontWeight: 500,
-    color: '#333'
-  };
-
   return (
-    <div style={{
-      display: 'flex',
-      justifyContent: 'center',
-      alignItems: 'center',
-      minHeight: 'calc(100vh - 80px)', 
-      backgroundColor: '#f4f7f6',
-      padding: '2rem 0' 
-    }}>
+    <div className="min-h-screen w-full bg-gradient-to-br from-cyan-50 via-blue-50 to-indigo-50 flex items-center justify-center p-4">
       
-      {/* กล่องฟอร์มหลัก */}
-      <form style={{
-        padding: '2.5rem', 
-        borderRadius: '12px',
-        backgroundColor: 'white',
-        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.05)',
-        display: 'flex',
-        flexDirection: 'column', 
-        gap: '1.25rem', 
-        width: '100%',
-        maxWidth: '700px' // กรอบกว้าง
-      }}>
-        
-        {/* --- 1. (แก้ไข) ส่วน Logo (แก้เรื่องจัดกลาง) --- */}
-        <div style={{ 
-          textAlign: 'center', // <-- ตัวนี้จะจัดกลาง <p> (tagline)
-          marginBottom: '1rem' 
-        }}>
-          
-          {/* Logo Image (แก้ไข) */}
-          <img 
+      <div className="bg-white rounded-2xl shadow-2xl p-8 sm:p-10 w-full max-w-md flex flex-col gap-6 border border-gray-100 animate-fade-in">
+
+        <div className="flex flex-col items-center gap-2">
+          <Image 
             src="/images/LogoTalentMatch.png" 
             alt="TalentMatch Logo" 
-            style={{ 
-              width: '100px', 
-              height: 'auto',
-              display: 'block', // <-- ทำให้เป็น block
-              margin: '0 auto 0.25rem auto' // <-- auto ซ้าย-ขวา เพื่อจัดกลาง
-            }} 
+            width={96}
+            height={96}
+            className="w-24 h-24 object-contain"
+            priority 
           />
-          
-          {/* "TalentMatch" Text (แก้ไข) */}
-          <span style={{
-            fontSize: 24, 
-            fontWeight: 700,
-            background: 'linear-gradient(90deg, #14ADD6, #384295)', 
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-            display: 'block', 
-            margin: '0.25rem auto 0.5rem auto' // <-- auto ซ้าย-ขวา เพื่อจัดกลาง
-          }}>
+          <span className="text-3xl font-bold bg-gradient-to-r from-cyan-500 to-indigo-600 bg-clip-text text-transparent">
             TalentMatch
           </span>
-
-          {/* Tagline (อันนี้จะกลางอยู่แล้วเพราะ textAlign: 'center' ของแม่) */}
-          <p style={{
-            fontSize: '14px',
-            color: '#515151',
-            margin: 0
-          }}>
-            Discover and connect with talented people to build the perfect team
+          <p className="text-sm text-gray-500 text-center max-w-xs">
+         AI-powered matching to build your perfect team.
           </p>
         </div>
-        {/* --- สิ้นสุดการแก้ไข --- */}
 
-
-        {/* --- 2. ส่วน Header --- */}
-        <div>
-          <h2 style={{
-            fontSize: '2rem', 
-            fontWeight: 700,
-            color: '#121212',
-            margin: 0
-          }}>
+        <div className="flex flex-col gap-1 text-center">
+          <h2 className="text-3xl font-bold text-gray-900">
             Sign In
           </h2>
-          <p style={{
-            fontSize: '1rem', 
-            color: '#515151',
-            margin: '0.25rem 0 0 0'
-          }}>
+          <p className="text-base text-gray-500">
             Welcome to Talent Match
           </p>
         </div>
         
-        {/* --- 3. Input Email --- */}
-        <div>
-          <label htmlFor="email" style={labelStyle}>
-            Email
-          </label>
-          <input 
-            type="email" 
-            id="email" 
-            style={inputStyle}
-            placeholder="yourmail@gmail.com"
-          />
-        </div>
-        
-        {/* --- 4. Input Password --- */}
-        <div>
-          <label htmlFor="password" style={labelStyle}>
-            Password
-          </label>
-          <input 
-            type="password" 
-            id="password" 
-            style={inputStyle}
-            placeholder="************"
-          />
-        </div>
-
-        {/* --- 5. Remember me & Forgot password --- */}
-        <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          fontSize: '14px'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <input type="checkbox" id="remember" style={{ margin: 0 }} />
-            <label htmlFor="remember" style={{ color: '#515151', fontWeight: 500 }}>
-              Remember me
-            </label>
-          </div>
-          <Link 
-            href="/forgot-password" 
-            style={{
-              color: '#3567FF',
-              textDecoration: 'none',
-              fontWeight: 500
-            }}
-          >
-            forgot password?
-          </Link>
-        </div>
-        
-        {/* --- 6. Submit Button --- */}
-        <button 
-          type="submit" 
-          style={{
-            backgroundColor: '#3567FF', 
-            color: 'white',
-            width: '100%',
-            padding: '0.75rem',
-            borderRadius: '8px',
-            border: 'none',
-            cursor: 'pointer',
-            fontWeight: 600,
-            fontSize: '16px',
-            marginTop: '0.5rem'
-          }}
-        >
-          Sign In
-        </button>
-
-        {/* --- 7. แถบขั้น "Or sign in with" --- */}
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '1rem',
-        }}>
-          <div style={{ flex: 1, height: '1px', backgroundColor: '#e0e0e0' }} />
-          <span style={{ color: '#515151', fontSize: '14px', flexShrink: 0 }}>
-            Or sign in with
+        <div className="flex items-center gap-4 py-2">
+          <div className="flex-1 h-px bg-gray-200" />
+          <span className="text-sm font-medium text-gray-500">
+            Sign in with
           </span>
-          <div style={{ flex: 1, height: '1px', backgroundColor: '#e0e0e0' }} />
+          <div className="flex-1 h-px bg-gray-200" />
         </div>
         
-        {/* --- 8. ปุ่ม Social Login --- */}
-        <div style={{
-          display: 'flex',
-          gap: '1rem', 
-        }}>
+        <div className="flex flex-col gap-4">
           
-        <button 
-        type="button" 
-        style={socialButtonStyle}
-        onClick={() => signIn('google', { callbackUrl: '/' })} // <-- เพิ่มบรรทัดนี้
+          <button 
+            type="button" 
+            onClick={() => signIn('google', { callbackUrl: '/' })}
+            className="flex w-full items-center justify-center gap-3 px-4 py-3 rounded-xl border border-gray-300 bg-white text-base font-semibold text-gray-700
+                       transition-all duration-300 ease-in-out
+                       hover:shadow-lg hover:border-gray-400 hover:-translate-y-0.5
+                       focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
           >
-        <img src="/images/google.svg" alt="Google" width={20} height={20} />
-        <span>Google</span>
-        </button>
+            <GoogleIcon />
+            Sign in with Google
+          </button>
 
-        <button 
-        type="button" 
-        style={socialButtonStyle}
-        onClick={() => signIn('facebook', { callbackUrl: '/' })} // <-- เพิ่มบรรทัดนี้
-        >
-        <img src="/images/facebook.svg" alt="Facebook" width={20} height={20} />
-        <span>Facebook</span>
-        </button>
         </div>
-
-        {/* --- 9. ส่วน Sign up --- */}
-        <p style={{
-          textAlign: 'center',
-          fontSize: '14px',
-          color: '#515151',
-          margin: 0,
-          marginTop: '0.5rem' 
-        }}>
-          Don t have an account?{' '}
-          <Link 
-            href="/register" 
-            style={{
-              fontWeight: 'bold', 
-              color: '#3567FF',  
-              textDecoration: 'none',
-            }}
-          >
-            Sign Up
-          </Link>
-        </p>
-
-      </form>
+      </div>
     </div>
   );
 }
