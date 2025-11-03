@@ -160,34 +160,10 @@ const handleFileUpload = async (applicantId: string, file: File) => {
       setShowPreviewModal(true);
     }
    
-    const response = await fetch('/api/extractCV', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ applicantId, fileUrl: publicURL })
-    });
-    const result = await response.json();
-
-    if (!response.ok) {
-        throw new Error(result.error || 'Failed to extract text from API');
-    }
-
-    if (!result.error) {
-      await supabase
-        .from('cvs')
-        .upsert([{
-          filename: file.name,
-          text: result.text || '',
-          upload_by: applicantId,
-          created_at: new Date().toISOString()
-        }], { 
-            onConflict: 'upload_by'
-        });
-
-      fetchApplicants(); 
-      setShowUploadModal(false);
-      alert('CV uploaded and text saved successfully!');
-    }
-
+   fetchApplicants(); 
+   setShowUploadModal(false);
+   alert('CV uploaded successfully!');
+    
   } catch (err: any) {
     console.error(err);
     alert(`Upload failed: ${err.message}`);
