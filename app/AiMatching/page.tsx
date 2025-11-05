@@ -215,7 +215,7 @@ const AIMatchingPage = () => {
 
   return (
     // ✅ ลบ class font-sans ออก เพื่อให้ใช้ Font Family ของระบบ/Global CSS
- <div className="min-h-screen bg-gray-50 p-8"> 
+ <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-8">
       <main className="max-w-4xl mx-auto">
         {/* Header */} 
         <div className="text-center mb-12 mt-4">
