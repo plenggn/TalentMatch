@@ -438,7 +438,7 @@ const AIMatchingPage = () => {
                  </div>
 
                  {/* Potential Gaps */}
-                 <div className="bg-red-50 border border-red-100 rounded-xl p-4">
+                 <div className="bg-blue-50 border border-blue-100 rounded-xl p-4">
                    <h4 className="flex items-center gap-2 text-lg font-semibold text-red-700 mb-2">
                      <AlertTriangle className="w-5 h-5 flex-shrink-0"/> Potential Gaps
                    </h4>
